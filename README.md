@@ -6,7 +6,7 @@
 
 以下为'nginx'相关的配置文件：
 
-'''
+'''bash
   services.nginx = {
     enable = true;
     logError = "stderr debug";
