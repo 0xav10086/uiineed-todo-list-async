@@ -6,7 +6,7 @@
 
 以下为'nginx'相关的配置文件：
 
-'''bash
+```
   services.nginx = {
     enable = true;
     logError = "stderr debug";
@@ -41,8 +41,7 @@
         '';
       };
     };
-  };
-'''
+  };```
 
 本人的修改到此结束了，不得不说Uiineed Todo List是一个很好的项目，希望可以帮到你
 
