@@ -1,12 +1,16 @@
-# Uiineed Todo List async介绍
+# Uiineed Todo List async 介绍
+
+## About this Fork
+
+This project is based on [ricocc/uiineed-todo-list](https://github.com/ricocc/uiineed-todo-list), with enhancements and asynchronous feature integration by [@0xav10086](https://github.com/0xav10086).
 
 本项目基于 ricocc/uiineed-todo-list 进行修改，主要增加了局域网同步功能
 
-为实现该功能，需要用用户开启一个后端服务器，使用命令`npm run`即可，若出现端口冲突，相关配置位于'./server.js'中，若有需求可搭配nginx使用，我就是这样使用的
+为实现该功能，需要用用户开启一个后端服务器，使用命令`npm run`即可，若出现端口冲突，相关配置位于`./server.js`中，若有需求可搭配`nginx`使用，我就是这样使用的
 
-以下为'nginx'相关的配置文件：
+以下为`nginx`相关的配置文件：
 
-```
+```bash
   services.nginx = {
     enable = true;
     logError = "stderr debug";
@@ -41,7 +45,8 @@
         '';
       };
     };
-  };```
+  };
+```
 
 本人的修改到此结束了，不得不说Uiineed Todo List是一个很好的项目，希望可以帮到你
 
