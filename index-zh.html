@@ -1,0 +1,732 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List Online 极简设计的网页版 Todo 清单 - 无需登陆 - By Ricocc</title>
+    <meta name="keywords" content="无需登录, 不用账号,online todo, todo, todo list,在线Todo,网页todo,备忘录, Todo清单, 在线Todo清单,无需注册登陆,极简清单,即开即用,便签, 提醒, 日程, 记事本, 记事, 待办事件,online todolist, online 清单,online 待办事项,极简的待办事项" />
+    <meta name="description" content="一款优秀的设计简洁的online todolist 网页版本应用,极简的待办事项,Todo清单,无需注册,无需登录, 不用账号,数据安全, 存储在H5浏览器本地缓存, 提供工作和生活辅助! 在线Todo清单,免登录,做最好的 online todo list 清单应用." />
+    <link type="favicon" rel="shortcut icon" href="public/img/favicon.png" />
+    <link href="public/css/normalize.css" rel="stylesheet" media="screen">
+    <link href="public/css/style.min.css" rel="stylesheet" media="screen">
+    <script>
+        // 自动判断语言并切换
+        const browserLanguage = navigator.language || navigator.userLanguage;
+        const languageCode = browserLanguage.split('-')[0].toLowerCase();
+        if (!localStorage.getItem('uiineed-todos-lang')) localStorage.setItem('uiineed-todos-lang', languageCode);
+        const userLanguage = localStorage.getItem('uiineed-todos-lang');
+        if (userLanguage && userLanguage !== "zh") window.location.href = (window.location.pathname === "/") ? 'index.html' : window.location.href.replace('index-zh.html', 'index.html');
+    </script>
+    <script>1
+        // 保存原生alert备用
+        const nativeAlert = window.alert;
+
+        // 重写alert方法
+        window.alert = function(message, title = '提示') {
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div'); // 遮罩层
+                overlay.className = 'custom-alert-overlay';
+                const alertBox = document.createElement('div'); // 提示框
+                alertBox.className = 'custom-alert';
+                alertBox.innerHTML = `
+<div class="custom-alert-title">${title}</div>
+<div class="custom-alert-content">${message}</div>
+<div class="custom-alert-buttons">
+    <button class="custom-alert-btn confirm">确定</button>
+</div>
+                `;
+                overlay.appendChild(alertBox);
+                document.body.appendChild(overlay);
+                const confirmBtn = alertBox.querySelector('.confirm');
+                confirmBtn.addEventListener('click', () => {
+                    alertBox.style.animation = 'popOut 0.3s forwards';
+                    setTimeout(() => {
+                        document.body.removeChild(overlay);
+                        resolve(true);
+                    }, 300);
+                });
+                overlay.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') confirmBtn.click();
+                });
+                confirmBtn.focus();
+            });
+        };
+
+        // 保存原生confirm备用
+        const nativeConfirm = window.alert;
+
+        // 重写confirm方法
+        window.confirm = function(message, title = '请确认') {
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                overlay.className = 'custom-alert-overlay';
+                const alertBox = document.createElement('div');
+                alertBox.className = 'custom-alert';
+                alertBox.innerHTML = `
+                    <div class="custom-alert-title">${title}</div>
+                    <div class="custom-alert-content">${message}</div>
+                    <div class="custom-alert-buttons">
+                        <button class="custom-alert-btn cancel">取消</button>
+                        <button class="custom-alert-btn confirm">确定</button>
+                    </div>
+                `;
+                overlay.appendChild(alertBox);
+                document.body.appendChild(overlay);
+                const confirmBtn = alertBox.querySelector('.confirm');
+                const cancelBtn = alertBox.querySelector('.cancel');
+                confirmBtn.addEventListener('click', () => {
+                    alertBox.style.animation = 'popOut 0.3s forwards';
+                    setTimeout(() => {
+                        document.body.removeChild(overlay);
+                        resolve(true);
+                    }, 300);
+                });
+                cancelBtn.addEventListener('click', () => {
+                    alertBox.style.animation = 'popOut 0.3s forwards';
+                    setTimeout(() => {
+                        document.body.removeChild(overlay);
+                        resolve(false);
+                    }, 300);
+                });
+                overlay.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') cancelBtn.click();
+                });
+                cancelBtn.focus();
+            });
+        };
+    </script>
+    <!-- Vue 2.x  Todo List   使用CDN就无需引入本地文件 -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script> -->
+    <script src="public/js/vue.js"></script>
+</head>
+<body>
+    <div class="bg-pattern"></div>
+    <div class="todo-wrapper">
+        <div id="todo-app" class="todo-app" >
+            <div class="container header ">
+                <div class="todo-input">
+                    <h1 class="title">
+                        <img src="public/img/todo.svg" alt="" class="title-1" draggable="false">
+                        <div class="ani-vector">
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <div class="pendulums">
+                            <div class="pendulum">
+                                <div class="bar"></div>
+                                <div class="motion">
+                                <div class="string"></div>
+                                <div class="weight"></div>
+                                </div>
+                            </div>
+                            <div class="pendulum shadow">
+                                <div class="bar"></div>
+                                <div class="motion">
+                                <div class="string"></div>
+                                <div class="weight"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </h1>
+                    <div class="add-content-wrapper">
+                        <input type="text" rows="3" class="add-content" placeholder="新增待办事项..." v-model="newTodoTitle"
+                            @keyup.enter="addTodo" :class='{empty:emptyChecked}' />
+                        <transition name="tips">
+                            <div class="tips" v-if='emptyChecked' style="color:red">💡请输入内容！</div>
+                        </transition>
+                        <button class="btn submit-btn" type="button" @click="addTodo">提交</button>
+                    </div>
+
+                </div>
+            </div>
+            <div class="container main">
+                <div class="todo-list-box">
+                    <div class="bar-message">
+                        <input type="button" class="btn btn-label btn-allFinish" value="全部标为完成"
+                            @click="markAllAsCompleted" v-if="todos.length || recycleBin.length" />
+                        <template>
+                            <div>
+                                <div v-if="!isEditing" @dblclick="editText" class="bar-message-text">
+                                    {{ slogan }}
+                                </div>
+                                <div v-else>
+                                    <input v-model="slogan" ref="sloganInput" class="slogan-input"  @keyup.enter="saveText" @keyup.esc="cancelText"/>
+                                        <div class="todo-btn btn-edit-submit slogan-btn" @click="saveText"><img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAxOSAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE2LjUwODQgMTAuMzEwOUMxNy4yMzI0IDEwLjU4MjMgMTguMDM5NCAxMC4yMTU1IDE4LjMxMDkgOS40OTE1N0MxOC41ODIzIDguNzY3NiAxOC4yMTU1IDcuOTYwNjMgMTcuNDkxNiA3LjY4OTE0TDE2LjUwODQgMTAuMzEwOVpNOC45OTk5IDJMMTAuMTMyMSAxLjE3NjU1QzkuODU1OCAwLjc5NjYxOCA5LjQwNzM1IDAuNTgwNjA1IDguOTM4MDIgMC42MDEzNjhDOC40Njg3IDAuNjIyMTMgOC4wNDEwNyAwLjg3Njg5OSA3Ljc5OTM4IDEuMjc5NzRMOC45OTk5IDJaTTcuNjcxNzUgMTcuNTU3MkM3LjQyNzIyIDE4LjI5MDcgNy44MjM2MiAxOS4wODM2IDguNTU3MTMgMTkuMzI4MUM5LjI5MDY0IDE5LjU3MjcgMTAuMDgzNSAxOS4xNzYzIDEwLjMyOCAxOC40NDI4TDcuNjcxNzUgMTcuNTU3MlpNMS4wOTk2MyA3LjkyNzkzQzAuNTA3NTQxIDguNDI1MTkgMC40MzA2NjkgOS4zMDgyOCAwLjkyNzkzMSA5LjkwMDM3QzEuNDI1MTkgMTAuNDkyNSAyLjMwODI4IDEwLjU2OTMgMi45MDAzNyAxMC4wNzIxTDEuMDk5NjMgNy45Mjc5M1pNMTcuNDkxNiA3LjY4OTE0QzE1LjgwMjMgNy4wNTU2NSAxMy45ODQxIDUuNTAzNiAxMi41MDk5IDMuOTY3OTVDMTEuNzkzIDMuMjIxMjIgMTEuMTkzOSAyLjUxNzQgMTAuNzc0NCAyLjAwMDU2QzEwLjU2NTEgMS43NDI2OSAxMC40MDE3IDEuNTMyNzYgMTAuMjkxOSAxLjM4OTA4QzEwLjIzNyAxLjMxNzI3IDEwLjE5NTYgMS4yNjIxMSAxMC4xNjg2IDEuMjI1OUMxMC4xNTUxIDEuMjA3OCAxMC4xNDUzIDEuMTk0NDQgMTAuMTM5MSAxLjE4NjEyQzEwLjEzNjEgMS4xODE5NSAxMC4xMzQgMS4xNzkwNSAxMC4xMzI4IDEuMTc3NDRDMTAuMTMyMiAxLjE3NjY0IDEwLjEzMTggMS4xNzYxNiAxMC4xMzE3IDEuMTc2MDFDMTAuMTMxNyAxLjE3NTkzIDEwLjEzMTcgMS4xNzU5NCAxMC4xMzE3IDEuMTc2MDNDMTAuMTMxOCAxLjE3NjA3IDEwLjEzMTkgMS4xNzYyIDEwLjEzMTkgMS4xNzYyM0MxMC4xMzIgMS4xNzYzNyAxMC4xMzIxIDEuMTc2NTUgOC45OTk5IDJDNy44Njc2NyAyLjgyMzQ1IDcuODY3ODMgMi44MjM2NyA3Ljg2OCAyLjgyMzlDNy44NjgwOCAyLjgyNDAxIDcuODY4MjYgMi44MjQyNiA3Ljg2ODQyIDIuODI0NDdDNy44Njg3MiAyLjgyNDkgNy44NjkwOSAyLjgyNTQgNy44Njk1MyAyLjgyNTk5QzcuODcwMzkgMi44MjcxOCA3Ljg3MTUgMi44Mjg2OSA3Ljg3Mjg1IDIuODMwNTRDNy44NzU1NCAyLjgzNDIzIDcuODc5MjIgMi44MzkyNCA3Ljg4Mzg1IDIuODQ1NTNDNy44OTMxIDIuODU4MTEgNy45MDYxOSAyLjg3NTgyIDcuOTIyOTggMi44OTgzN0M3Ljk1NjU2IDIuOTQzNDUgOC4wMDQ5OSAzLjAwNzkyIDguMDY3MyAzLjA4OTQ0QzguMTkxODUgMy4yNTIzOSA4LjM3MjE3IDMuNDgzODcgOC42MDAzOCAzLjc2NTA2QzkuMDU1OTMgNC4zMjYzNSA5LjcwNjg1IDUuMDkxMjggMTAuNDkgNS45MDcwNUMxMi4wMTU4IDcuNDk2NCAxNC4xOTc3IDkuNDQ0MzUgMTYuNTA4NCAxMC4zMTA5TDE3LjQ5MTYgNy42ODkxNFpNNy42MTM5NyAyLjE5ODAxQzguMTA2NjkgNS42NDY2OSA4LjM0OTk3IDguODI5MjYgOC4zNDk5NyAxMS41QzguMzQ5OTcgMTQuMjAxNSA4LjEwMDE0IDE2LjI3MjIgNy42NzE3NSAxNy41NTcyTDEwLjMyOCAxOC40NDI4QzEwLjg5OTggMTYuNzI3OCAxMS4xNSAxNC4yOTg2IDExLjE1IDExLjVDMTEuMTUgOC42NzA3NiAxMC44OTMyIDUuMzUzMzEgMTAuMzg1OCAxLjgwMTk5TDcuNjEzOTcgMi4xOTgwMVpNMi45MDAzNyAxMC4wNzIxQzMuODgyMjggOS4yNDc0MiA1LjI5NjM2IDguMDkwMzMgNi42NDM3OSA2LjgzMDFDNy45NzY2NCA1LjU4MzUyIDkuMzQ1ODcgNC4xNDQ1OCAxMC4yMDA0IDIuNzIwMjZMNy43OTkzOCAxLjI3OTc0QzcuMTU0MDIgMi4zNTU0MiA2LjAyMzMxIDMuNTc2NjMgNC43MzExOCA0Ljc4NTEzQzMuNDUzNjQgNS45Nzk5OCAyLjExNzcyIDcuMDcyODkgMS4wOTk2MyA3LjkyNzkzTDIuOTAwMzcgMTAuMDcyMVoiIGZpbGw9IiMzMzMyMkUiLz4KPC9zdmc+Cg==" alt="Finish"></div>
+                                </div>
+                            </div>
+                          </template>
+                    </div>
+
+                    <ul v-if="!todos.length && showEmptyTips" class="empty-tips">
+                        <li> 添加你的第一个待办事项！📝</li>
+                        <li>食用方法💡：</li>
+                        <li>✔️ 所有提交操作支持Enter回车键提交</li>
+                        <li>✔️ 拖拽Todo上下移动可排序(仅支持PC)</li>
+                        <li>✔️ 双击上面的标语和 Todo 可进行编辑</li>
+                        <li>✔️ 右侧的小窗口是快捷操作哦</li>
+                        <li>🔒 所有的Todo数据存储在浏览器本地</li>
+                        <li>📝 支持下载和导入，导入追加到当前序列</li>
+                    </ul>
+
+                    <transition-group name="drag" class="todo-list" tag="ul" mode="in-out" @before-enter="beforeEnter"
+                    @enter="enter" @after-enter="afterEnter"
+                    :css="false"
+                    appear>
+
+                        <li v-for='(todo, index) in filteredTodos' :key='todo.id' class='todo-item'
+                            @dragenter="dragenter($event, index)" @dragover="dragover($event, index)"
+                            @dragstart="dragstart(index)"
+                            :data-delay="index * 150 * delayTime"
+                            v-show="show"
+                            :draggable="!(editedTodo !== null && editedTodo.id === todo.id)">
+                            <div class="todo-content" :class='{completed:todo.completed}' @dblclick="editdTodo(todo)">
+                                {{todo.title}}</div>
+                            <!-- 标记完成 -->
+                            <div class="todo-btn btn-finish" v-if="!todo.completed" @click="markAsCompleted(todo)">
+                            </div>
+                            <!-- 标为未完成 -->
+                            <div class="todo-btn btn-unfinish" v-if="todo.completed" @click="markAsUncompleted(todo)">
+                                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAyNCAxOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIuMzYzMTcgOS42NzUwNkMxLjU1OTM5IDkuNDc0NDkgMC43NDUyMDQgOS45NjM0OCAwLjU0NDYyOSAxMC43NjczQzAuMzQ0MDU0IDExLjU3MSAwLjgzMzA0NyAxMi4zODUyIDEuNjM2ODMgMTIuNTg1OEwyLjM2MzE3IDkuNjc1MDZaTTguMTU4NzMgMTZMNi43ODA0MSAxNi41OTE4QzcuMDMwOTggMTcuMTc1NCA3LjYyMTk1IDE3LjUzNzkgOC4yNTU3NSAxNy40OTY5QzguODg5NTQgMTcuNDU1OCA5LjQyODc3IDE3LjAyIDkuNjAxOTEgMTYuNDA4OUw4LjE1ODczIDE2Wk0yMi4zMjYxIDMuNDY0MTNDMjMuMTM0NyAzLjI4NDA2IDIzLjY0NDIgMi40ODI1NyAyMy40NjQxIDEuNjczOTVDMjMuMjg0MSAwLjg2NTMyOCAyMi40ODI2IDAuMzU1NzkxIDIxLjY3MzkgMC41MzU4NjZMMjIuMzI2MSAzLjQ2NDEzWk0xLjYzNjgzIDEyLjU4NThDMi4wMjc2NCAxMi42ODMzIDMuMTIyOTkgMTMuMTUxIDQuMjc3OCAxMy45NDI2QzUuNDM5ODggMTQuNzM5MyA2LjM4OTA2IDE1LjY4MDMgNi43ODA0MSAxNi41OTE4TDkuNTM3MDUgMTUuNDA4MkM4LjgxMDk0IDEzLjcxNzEgNy4zMDE1NyAxMi4zNzgzIDUuOTc0MDYgMTEuNDY4MkM0LjYzOTI3IDEwLjU1MzIgMy4yMTM5OSA5Ljg4NzM4IDIuMzYzMTcgOS42NzUwNkwxLjYzNjgzIDEyLjU4NThaTTkuNjAxOTEgMTYuNDA4OUMxMC4xMzU5IDE0LjUyNDQgMTEuNDk0OCAxMS42NTg1IDEzLjY3MjcgOS4wNjM5NUMxNS44NDQ1IDYuNDc2NzUgMTguNzQxNyA0LjI2MjM1IDIyLjMyNjEgMy40NjQxM0wyMS42NzM5IDAuNTM1ODY2QzE3LjI1ODMgMS41MTkyIDEzLjgyNzUgNC4yMTM0MiAxMS4zNzQ5IDcuMTM1MTRDOC45Mjg1MiAxMC4wNDk1IDcuMzY2NzQgMTMuMjkyOSA2LjcxNTU1IDE1LjU5MTFMOS42MDE5MSAxNi40MDg5WiIgZmlsbD0iIzMzMzIyRSIvPgo8L3N2Zz4K"
+                                alt="标为未完成" class="icon-finish" draggable="false">
+                            </div>
+                            <!-- 还原 -->
+                            <div v-if="todo.removed" class="todo-btn btn-restore" @click="restoreTodo(todo)">
+                                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkiIGhlaWdodD0iMTkiIHZpZXdCb3g9IjAgMCAxOSAxOSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTcuMzQ3OTggMi42NTc5MkM3LjcxMTM0IDEuOTEzNDQgNy40MDIzOCAxLjAxNTM1IDYuNjU3OSAwLjY1MTk4OEM1LjkxMzQxIDAuMjg4NjI3IDUuMDE1MzIgMC41OTc1OSA0LjY1MTk2IDEuMzQyMDhMNy4zNDc5OCAyLjY1NzkyWk0xLjUyNiA5LjA4MzMzTDAuMzc1NTcxIDguMTIwNzhDMC4wNzc5NTE2IDguNDc2NDkgLTAuMDM4MzgyIDguOTQ5ODcgMC4wNjA0NjEyIDkuNDAzMDFDMC4xNTkzMDQgOS44NTYxNSAwLjQ2MjIwNiAxMC4yMzgxIDAuODgwOTI0IDEwLjQzNzVMMS41MjYgOS4wODMzM1pNMTQuNTcyNCAxNi41ODkzQzE0LjM0NTYgMTcuMzg2IDE0LjgwNzYgMTguMjE1OCAxNS42MDQ0IDE4LjQ0MjZDMTYuNDAxMiAxOC42Njk0IDE3LjIzMSAxOC4yMDczIDE3LjQ1NzggMTcuNDEwNkwxNC41NzI0IDE2LjU4OTNaTTYuMjUxOTIgMTQuMzMyMUM2LjcxMTQ1IDE1LjAyMTMgNy42NDI3NiAxNS4yMDc2IDguMzMyMDUgMTQuNzQ4MUM5LjAyMTM0IDE0LjI4ODUgOS4yMDc2IDEzLjM1NzIgOC43NDgwOCAxMi42Njc5TDYuMjUxOTIgMTQuMzMyMVpNNC42NTE5NiAxLjM0MjA4QzMuNjc2NiAzLjM0MDQ3IDIuNjAwMzMgNS4wNDUyNSAxLjc2NjU4IDYuMjUxMDhDMS4zNTA1OSA2Ljg1MjcyIDAuOTk3MjYzIDcuMzI2ODUgMC43NTAzODQgNy42NDc2MkMwLjYyNzAwNSA3LjgwNzkzIDAuNTMwMzkyIDcuOTI5NyAwLjQ2NjA0NyA4LjAwOTY5QzAuNDMzODggOC4wNDk2NyAwLjQwOTc5NiA4LjA3OTIgMC4zOTQ0ODIgOC4wOTc4NkMwLjM4NjgyNiA4LjEwNzE4IDAuMzgxMzY0IDguMTEzNzkgMC4zNzgxODMgOC4xMTc2M0MwLjM3NjU5MiA4LjExOTU1IDAuMzc1NTcyIDguMTIwNzcgMC4zNzUxMzMgOC4xMjEzQzAuMzc0OTE0IDguMTIxNTcgMC4zNzQ4NCA4LjEyMTY1IDAuMzc0OTEyIDguMTIxNTdDMC4zNzQ5NDggOC4xMjE1MiAwLjM3NTAyMSA4LjEyMTQ0IDAuMzc1MTMxIDguMTIxM0MwLjM3NTE4NiA4LjEyMTI0IDAuMzc1Mjk2IDguMTIxMTEgMC4zNzUzMjMgOC4xMjEwN0MwLjM3NTQ0MiA4LjEyMDkzIDAuMzc1NTcxIDguMTIwNzggMS41MjYgOS4wODMzM0MyLjY3NjQzIDEwLjA0NTkgMi42NzY1OCAxMC4wNDU3IDIuNjc2NzMgMTAuMDQ1NUMyLjY3NjggMTAuMDQ1NCAyLjY3Njk2IDEwLjA0NTIgMi42NzcwOSAxMC4wNDUxQzIuNjc3MzUgMTAuMDQ0OCAyLjY3NzY1IDEwLjA0NDQgMi42Nzc5OCAxMC4wNDRDMi42Nzg2NSAxMC4wNDMyIDIuNjc5NDYgMTAuMDQyMyAyLjY4MDQyIDEwLjA0MTFDMi42ODIzNCAxMC4wMzg4IDIuNjg0ODYgMTAuMDM1OCAyLjY4Nzk0IDEwLjAzMkMyLjY5NDEyIDEwLjAyNDYgMi43MDI2MSAxMC4wMTQzIDIuNzEzMzMgMTAuMDAxM0MyLjczNDc1IDkuOTc1MTYgMi43NjUwOCA5LjkzNzk1IDIuODAzNjIgOS44OTAwNUMyLjg4MDY3IDkuNzk0MjYgMi45OTA2IDkuNjU1NjEgMy4xMjc3OCA5LjQ3NzM4QzMuNDAyMDEgOS4xMjEwNiAzLjc4NTg3IDguNjA1NjIgNC4yMzQxNyA3Ljk1NzI1QzUuMTI5IDYuNjYzMDggNi4yODk3MiA0LjgyNjIgNy4zNDc5OCAyLjY1NzkyTDQuNjUxOTYgMS4zNDIwOFpNMi4wNDcwNCAxMC40ODk5QzMuNzc2MTcgOS44NDk0MiA1LjczMzE5IDkuMTcyMzEgNy42MzggOC43MjEzN0M5LjU3MDA4IDguMjYzOTkgMTEuMzAyNSA4LjA3NjMxIDEyLjYyODggOC4zMDE3QzEzLjg3NTIgOC41MTM1MiAxNC42Mjg0IDkuMDUwMDggMTUuMDE2MyAxMC4wNDA1QzE1LjQ2MjggMTEuMTgwNyAxNS41MzgzIDEzLjE5NTYgMTQuNTcyNCAxNi41ODkzTDE3LjQ1NzggMTcuNDEwNkMxOC40ODQzIDEzLjgwNDIgMTguNjE2NiAxMS4wMDY3IDE3LjgwOTcgOC45NDY0NkMxNi45NDQyIDYuNzM2MzQgMTUuMTMzNyA1LjY4NDM3IDEzLjEzMTQgNS4zNDQxMUMxMS4yMDkyIDUuMDE3NDMgOS4wMDc5OSA1LjMxNDEzIDYuOTQ2OSA1LjgwMjA2QzQuODU4NTYgNi4yOTY0NCAyLjc2MjgzIDcuMDI1NTggMS4wMDQ5NiA3LjY3NjczTDIuMDQ3MDQgMTAuNDg5OVpNOC43NDgwOCAxMi42Njc5QzcuNTIzMTIgMTAuODMwNSA1LjIyOTM0IDkuMTg1OTMgMi4xNzEwOCA3LjcyOTEzTDAuODgwOTI0IDEwLjQzNzVDMy43NzA2NiAxMS44MTQxIDUuNDc2ODggMTMuMTY5NSA2LjI1MTkyIDE0LjMzMjFMOC43NDgwOCAxMi42Njc5WiIgZmlsbD0iIzMzMzIyRSIvPgo8L3N2Zz4K"
+                                alt="还原" draggable="false">
+                            </div>
+                            <!-- 删除 -->
+                            <div class="todo-btn btn-delete" v-else="todo.removed" @click="removeTodo(todo)">
+                                <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAxOCAxOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xNS4wOTkzIDE3Ljc1OTdDMTUuNzk0OSAxOC4yMDk4IDE2LjcyMzUgMTguMDEwOCAxNy4xNzM2IDE3LjMxNTJDMTcuNjIzNiAxNi42MTk3IDE3LjQyNDYgMTUuNjkxMSAxNi43MjkxIDE1LjI0MUMxMy4zMDc5IDEzLjAyNzMgMTAuODIwOSAxMC45OTU5IDguOTIyNTEgOS4wMzczOUM5LjA5NzQyIDguODQ5ODIgOS4yNzI5MSA4LjY2NTcxIDkuNDQ4ODggOC40ODUzNEMxMS44ODY0IDUuOTg2OTIgMTQuMjQ3MiA0LjM4MDY2IDE2LjI5NDQgMy45NzEyMkMxNy4xMDY3IDMuODA4NzUgMTcuNjMzNSAzLjAxODUyIDE3LjQ3MTEgMi4yMDYxOEMxNy4zMDg2IDEuMzkzODQgMTYuNTE4NCAwLjg2NzAxMyAxNS43MDYgMS4wMjk0OEMxMi43NTMyIDEuNjIwMDUgOS44NjQwNiAzLjc2Mzc5IDcuMzAxNTQgNi4zOTAzN0M3LjE4MTUxIDYuNTEzNCA3LjA2MTgxIDYuNjM3ODkgNi45NDI0OSA2Ljc2Mzc1QzUuNDIwMDEgNC44MDQzMyA0LjM3MDU4IDIuODc2MzIgMy40MjU5MSAwLjg2MzE2NEMzLjA3Mzk5IDAuMTEzMjAyIDIuMTgwNzMgLTAuMjA5NDc1IDEuNDMwNzcgMC4xNDI0NDVDMC42ODA4MDkgMC40OTQzNjUgMC4zNTgxMzIgMS4zODc2MiAwLjcxMDA1MSAyLjEzNzU4QzEuODIwODggNC41MDQ4MSAzLjA3ODk5IDYuNzY1MTEgNC45MjkzMiA5LjA1MzA2QzMuMjIyMDYgMTEuMTM0MSAxLjYyNjY5IDEzLjQzMjggMC4yMjI3MjMgMTUuNzE0MkMtMC4yMTE0NTMgMTYuNDE5NyAwLjAwODUyNzUyIDE3LjM0MzcgMC43MTQwNjQgMTcuNzc3OEMxLjQxOTYgMTguMjEyIDIuMzQzNTIgMTcuOTkyIDIuNzc3NyAxNy4yODY1QzQuMDQ4MTkgMTUuMjIyIDUuNDY0MDUgMTMuMTcyNiA2Ljk1NTU5IDExLjMxNjhDOC45ODUgMTMuMzc2NSAxMS41OTU5IDE1LjQ5MjggMTUuMDk5MyAxNy43NTk3WiIgZmlsbD0iIzMzMzIyRSIvPgo8L3N2Zz4K"
+                                alt="删除" draggable="false">
+                            </div>
+                            <!-- 编辑 -->
+                            <div class="edit-todo-wrapper" v-if="editedTodo !== null && editedTodo.id === todo.id">
+                                <input type="text" class="edit-todo" value="编辑 Todo..."
+                                    v-if="editedTodo !== null && editedTodo.id === todo.id" v-model="todo.title"
+                                    v-focus="true" @keyup.enter="editDone(todo)" @keyup.esc="cancelEdit(todo)" @dragstart.stop.prevent @mousedown.stop />
+                                <div class="todo-btn btn-edit-submit"
+                                    @click="editDone(todo)" >
+                                    <img src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAxOSAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE2LjUwODQgMTAuMzEwOUMxNy4yMzI0IDEwLjU4MjMgMTguMDM5NCAxMC4yMTU1IDE4LjMxMDkgOS40OTE1N0MxOC41ODIzIDguNzY3NiAxOC4yMTU1IDcuOTYwNjMgMTcuNDkxNiA3LjY4OTE0TDE2LjUwODQgMTAuMzEwOVpNOC45OTk5IDJMMTAuMTMyMSAxLjE3NjU1QzkuODU1OCAwLjc5NjYxOCA5LjQwNzM1IDAuNTgwNjA1IDguOTM4MDIgMC42MDEzNjhDOC40Njg3IDAuNjIyMTMgOC4wNDEwNyAwLjg3Njg5OSA3Ljc5OTM4IDEuMjc5NzRMOC45OTk5IDJaTTcuNjcxNzUgMTcuNTU3MkM3LjQyNzIyIDE4LjI5MDcgNy44MjM2MiAxOS4wODM2IDguNTU3MTMgMTkuMzI4MUM5LjI5MDY0IDE5LjU3MjcgMTAuMDgzNSAxOS4xNzYzIDEwLjMyOCAxOC40NDI4TDcuNjcxNzUgMTcuNTU3MlpNMS4wOTk2MyA3LjkyNzkzQzAuNTA3NTQxIDguNDI1MTkgMC40MzA2NjkgOS4zMDgyOCAwLjkyNzkzMSA5LjkwMDM3QzEuNDI1MTkgMTAuNDkyNSAyLjMwODI4IDEwLjU2OTMgMi45MDAzNyAxMC4wNzIxTDEuMDk5NjMgNy45Mjc5M1pNMTcuNDkxNiA3LjY4OTE0QzE1LjgwMjMgNy4wNTU2NSAxMy45ODQxIDUuNTAzNiAxMi41MDk5IDMuOTY3OTVDMTEuNzkzIDMuMjIxMjIgMTEuMTkzOSAyLjUxNzQgMTAuNzc0NCAyLjAwMDU2QzEwLjU2NTEgMS43NDI2OSAxMC40MDE3IDEuNTMyNzYgMTAuMjkxOSAxLjM4OTA4QzEwLjIzNyAxLjMxNzI3IDEwLjE5NTYgMS4yNjIxMSAxMC4xNjg2IDEuMjI1OUMxMC4xNTUxIDEuMjA3OCAxMC4xNDUzIDEuMTk0NDQgMTAuMTM5MSAxLjE4NjEyQzEwLjEzNjEgMS4xODE5NSAxMC4xMzQgMS4xNzkwNSAxMC4xMzI4IDEuMTc3NDRDMTAuMTMyMiAxLjE3NjY0IDEwLjEzMTggMS4xNzYxNiAxMC4xMzE3IDEuMTc2MDFDMTAuMTMxNyAxLjE3NTkzIDEwLjEzMTcgMS4xNzU5NCAxMC4xMzE3IDEuMTc2MDNDMTAuMTMxOCAxLjE3NjA3IDEwLjEzMTkgMS4xNzYyIDEwLjEzMTkgMS4xNzYyM0MxMC4xMzIgMS4xNzYzNyAxMC4xMzIxIDEuMTc2NTUgOC45OTk5IDJDNy44Njc2NyAyLjgyMzQ1IDcuODY3ODMgMi44MjM2NyA3Ljg2OCAyLjgyMzlDNy44NjgwOCAyLjgyNDAxIDcuODY4MjYgMi44MjQyNiA3Ljg2ODQyIDIuODI0NDdDNy44Njg3MiAyLjgyNDkgNy44NjkwOSAyLjgyNTQgNy44Njk1MyAyLjgyNTk5QzcuODcwMzkgMi44MjcxOCA3Ljg3MTUgMi44Mjg2OSA3Ljg3Mjg1IDIuODMwNTRDNy44NzU1NCAyLjgzNDIzIDcuODc5MjIgMi44MzkyNCA3Ljg4Mzg1IDIuODQ1NTNDNy44OTMxIDIuODU4MTEgNy45MDYxOSAyLjg3NTgyIDcuOTIyOTggMi44OTgzN0M3Ljk1NjU2IDIuOTQzNDUgOC4wMDQ5OSAzLjAwNzkyIDguMDY3MyAzLjA4OTQ0QzguMTkxODUgMy4yNTIzOSA4LjM3MjE3IDMuNDgzODcgOC42MDAzOCAzLjc2NTA2QzkuMDU1OTMgNC4zMjYzNSA5LjcwNjg1IDUuMDkxMjggMTAuNDkgNS45MDcwNUMxMi4wMTU4IDcuNDk2NCAxNC4xOTc3IDkuNDQ0MzUgMTYuNTA4NCAxMC4zMTA5TDE3LjQ5MTYgNy42ODkxNFpNNy42MTM5NyAyLjE5ODAxQzguMTA2NjkgNS42NDY2OSA4LjM0OTk3IDguODI5MjYgOC4zNDk5NyAxMS41QzguMzQ5OTcgMTQuMjAxNSA4LjEwMDE0IDE2LjI3MjIgNy42NzE3NSAxNy41NTcyTDEwLjMyOCAxOC40NDI4QzEwLjg5OTggMTYuNzI3OCAxMS4xNSAxNC4yOTg2IDExLjE1IDExLjVDMTEuMTUgOC42NzA3NiAxMC44OTMyIDUuMzUzMzEgMTAuMzg1OCAxLjgwMTk5TDcuNjEzOTcgMi4xOTgwMVpNMi45MDAzNyAxMC4wNzIxQzMuODgyMjggOS4yNDc0MiA1LjI5NjM2IDguMDkwMzMgNi42NDM3OSA2LjgzMDFDNy45NzY2NCA1LjU4MzUyIDkuMzQ1ODcgNC4xNDQ1OCAxMC4yMDA0IDIuNzIwMjZMNy43OTkzOCAxLjI3OTc0QzcuMTU0MDIgMi4zNTU0MiA2LjAyMzMxIDMuNTc2NjMgNC43MzExOCA0Ljc4NTEzQzMuNDUzNjQgNS45Nzk5OCAyLjExNzcyIDcuMDcyODkgMS4wOTk2MyA3LjkyNzkzTDIuOTAwMzcgMTAuMDcyMVoiIGZpbGw9IiMzMzMyMkUiLz4KPC9zdmc+Cg==" alt="提交" draggable="false">
+                                </div>
+                            </div>
+                        </li>
+                    </transition-group>
+                    <div class="bar-message bar-bottom">
+                        <div class="bar-message-text">
+                            <span v-if="leftTodosCount">剩余 {{leftTodosCount}} 项未完成</span>
+                            <span v-else-if="completedTodosCount">完美收工！</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer side-bar" >
+                    <div class="side-shortcut" @click="shortCutAction()" :class="{fold: isShow}">
+                        <div class="shortcut-switch">
+                           <span class="shortcut-title">{{shortCut}}</span>
+                           <span class="shortcut-name">快捷操作 </span>
+                        </div>
+
+                    </div>
+                    <div class="todo-footer-box">
+                        <ul class="todo-func-list filter">
+                            <!-- <li v-if="todos.length || recycleBin.length">筛选：</li> -->
+                            <!-- <li v-if="hasRemovedTodo" ><input type="button" value="撤销" v-if="hasRemovedTodo" @click="restoreTodo()"></li> -->
+                            <li > <input class="btn-small action-showAll"
+                                    type="button" value="全部" :class="{selected: intention === 'all'}"
+                                    @click="intention ='all'"></li>
+                            <li v-if="completedTodosCount"><input class="btn-small action-progress" type="button"
+                                    value="进行中" v-if="leftTodosCount" :class="{selected: intention === 'ongoing'}"
+                                    @click="intention ='ongoing'"></li>
+                            <li v-if="completedTodosCount">
+                                <input class="btn-small action-completed" type="button" value="已完成"
+                                    v-if="completedTodosCount" :class="{selected: intention === 'completed'}"
+                                    @click="intention='completed'">
+                            </li>
+                            <li v-if="recycleBin.length">
+                                <input class="btn-small action-deleted" type="button" v-if="recycleBin.length"
+                                    :class="{selected: intention === 'removed'}" value="回收站" @click="intention='removed'" />
+                            </li>
+                        </ul>
+                        <ul class="todo-func-list batch">
+                            <!-- <li v-if="todos.length">批量操作：</li> -->
+                            <li v-if="leftTodosCount"> <input type="button" class="btn-small completed-all"
+                                    v-if="leftTodosCount" value="全部标为已完成" @click="markAllAsCompleted"> </li>
+                            <li v-if="completedTodosCount"> <input type="button" value="清除已完成"
+                                    class="btn-small completed-clear" v-if="completedTodosCount" @click="clearCompleted">
+                            </li>
+                            <li v-if="todos.length"><input type="button" class="btn-small clear-all" value="清除全部"
+                                    @click="clearAll"> </li>
+                        </ul>
+                        <ul class="todo-func-list datasave">
+                          <li v-if="leftTodosCount">
+                              <input type="button" value="导出数据"  class="btn-small  action-download" id="download" onclick="handleClickDownload()"></input>
+                           </li>
+                           <li>
+                             <input  value="导入(txt/json)" type="button" class="btn-small action-import" id="import" />
+                                <!-- <input type="file" id="import-file" accept=".txt,.json" style="display:none"> -->
+                          </li>
+                        </ul>
+
+                    </div>
+
+                </div>
+            </div>
+
+             <!-- 自定义个人的信息 -->
+            <div class="nav" draggable="false">
+                <div class="github">
+                    <a href="https://github.com/ricocc/uiineed-todo-list?ref=opensource-todo" target="_blank" class="social-link" draggable="false">
+                        <img src="public/img/social/github.svg" class="ic-social" alt="" draggable="false">
+                    </a>
+                </div>
+                <!-- <div class="about">
+                    <div class="info">
+                        <div class="info-ico" @click="togglePop" :style="{ fontWeight: popShow ? 'normal' : 'bold' }">
+                            关于我
+                        </div>
+                        <div class="popup animated popIn" v-if="!popShow">
+                            <div class="author">
+                                <img src="public/img/author.jpg" alt="">
+                                Rico的设计漫想
+                            </div>
+                            <div class="author-info">
+                                <div class="author-desc">
+                                    简简单单喜欢探索设计和开发的设计师.
+                                </div>
+                            </div>
+
+                            <div class="social">
+                                <a href="https://www.xiaohongshu.com/user/profile/5f2b6903000000000101f51f?ref=opensource-todo" target="_blank" class="social-link">
+                                    <img src="public/img/social/xiaohongshu.svg" class="ic-social" alt="">
+                                </a>
+                                <a href="https://space.bilibili.com/11442751?ref=opensource-todo" target="_blank" class="social-link">
+                                    <img src="public/img/social/bilibili.svg" class="ic-social" alt="">
+                                </a>
+                                <a href="https://ricocc.zcool.com.cn/?ref=opensource-todo" target="_blank" class="social-link">
+                                    <img src="public/img/social/zcool.svg" class="ic-social" alt="">
+                                </a>
+                                <a href="mailto:ricocc@qq.com" class="social-link">
+                                    <img src="public/img/social/mail.svg" class="ic-social" alt="">
+                                </a>
+                            </div>
+                            <a href="https://blog.ricocc.com/?ref=todo" target="_blank" class="inspiration">🔖开源的设计博客↗
+                            </a>
+                            <div class="zanshan">
+                                <p>有问题可以添加微信☕</p>
+                                <img src="public/img/wechat_qrcode.jpg" alt=""  class="zanshan-qr">
+                            </div>
+                        </div>
+                    </div>
+                </div> -->
+                <!-- 根据需要切换中英文作为首页 -->
+                <div class="language switch-language">
+                    <a href="index.html" class="en" draggable="false" @click="saveLanguage('en')">En</a>
+                    <span>/</span>
+                    <a href="javascript:;" target="_self" class="zh active" draggable="false">中</a>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // localStorage 存储数据
+        var STORAGE_KEY = 'uiineed-todos';
+        var todoStorage = {
+            fetch: function () {
+                var todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                todos.forEach(function (todo, index) {
+                    todo.id = index;
+                });
+                todoStorage.uid = todos.length;
+                return todos
+            },
+            save: function (todos) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(todos))
+            }
+        }
+    </script>
+    <script>
+        var app = new Vue({
+            el: '#todo-app',
+            data: function () {
+                return {
+                    todos: todoStorage.fetch(),
+                    newTodoTitle: '',
+                    editedTodo: null,
+                    intention: 'all', //默认为 all
+                    checkEmpty: false,
+                    recycleBin: [],
+                    dragIndex: '',
+                    enterIndex: '',
+                    show: true,
+                    delayTime: '1',
+                    isShow: false,
+                    shortCut:'开✨',
+                    popShow:true,
+                    windowWidth: document.documentElement.clientWidth,
+                    slogan: this.getSlogan(),
+                    isEditing: false,
+                    originalSlogan: ""
+                }
+            },
+            // 监测 todos 列表的变化，将变化存储到 local storage
+            watch: {
+                windowWidth (val) {
+                    let that = this;
+                    console.log("实时屏幕宽度：",val);
+                },
+                todos: {
+                    handler: function (todos) {
+                        todoStorage.save(todos)
+                    },
+                    deep: true
+                }
+            },
+            methods: {
+                editText() {
+                    this.originalSlogan = this.slogan;
+                    this.isEditing = true;
+                    this.$nextTick(() => {
+                        this.$refs.sloganInput.focus();
+                    });
+                },
+                saveText() {
+                    this.isEditing = false;
+                    localStorage.setItem('uiineed-slogan', this.slogan);
+                },
+                cancelText() {
+                    this.slogan = this.originalSlogan;
+                    this.isEditing = false;
+                },
+                getSlogan() {
+                    return localStorage.getItem('uiineed-slogan') || "今日事今日毕，勿将今事待明日!.☕";
+                },
+                contorlScreen:function(){
+                    if(this.windowWidth < 768){
+                        this.isShow = !this.isShow;
+                        return this.shortCut = 'Filter'
+                    }
+                },
+                togglePop: function(){
+                    this.popShow = !this.popShow;//取反
+                },
+                shortCutAction: function(){
+                    this.isShow = !this.isShow;
+                    if(this.isShow){
+                        return this.shortCut = '关'
+                    }else{
+                        return this.shortCut = '开✨'
+                    }
+
+                },
+                shuffle: function () {
+                    this.filteredTodos = _.shuffle(this.filteredTodos);
+                },
+                addTodo: function (e) {
+                    if (this.newTodoTitle === '') {
+                        this.checkEmpty = true;
+                        return
+                    }else{
+                    }
+                    this.todos.unshift({
+                        id: todoStorage.uid++,
+                        title: this.newTodoTitle,
+                        completed: false,
+                        removed: false,
+                    });
+                    this.newTodoTitle = '';
+                    this.checkEmpty = false;
+                    this.delayTime = '0';
+
+
+                },
+                markAsCompleted: function (todo) {
+                    todo.completed = true;
+                },
+                markAsUncompleted: function (todo) {
+                    todo.completed = false
+                },
+                markAllAsCompleted: function () {
+                    confirm('确认一键勾选完成全部待办事项？').then((confirmed) => {
+                        if (confirmed) {
+                            this.todos.map(function (todo) {
+                                if (!todo.completed) todo.completed = true;
+                            })
+                        }
+                    }); 
+                },
+                removeTodo: function (todo) {
+                    let removedTodo = this.todos.splice(this.todos.indexOf(todo), 1)[0];
+                    removedTodo.removed = true;
+                    this.recycleBin.unshift(removedTodo);
+                    let pos = this.todos.indexOf(todo);
+                },
+                restoreTodo: function (todo) {
+                    todo.removed = false;
+                    this.todos.unshift(todo);
+                    let pos = this.recycleBin.indexOf(todo);
+                    this.recycleBin.splice(pos, 1);
+                },
+                editdTodo: function (todo) {
+                    this.editedTodo = {
+                        id: todo.id,
+                        title: todo.title
+                    }
+
+                },
+                lineFeed: function(event) {
+                    if (event.keyCode == 13 && event.ctrlKey ){
+                            this.newTodoTitle = this.newTodoTitle + '\n';
+                        } else {
+                            //event.preventDefault();
+                            if (this.newTodoTitle === '') {
+                                    this.checkEmpty = true;
+                                    return
+                                }else{
+                                }
+                                this.todos.unshift({
+                                    id: todoStorage.uid++,
+                                    title: this.newTodoTitle,
+                                    completed: false,
+                                    removed: false,
+                                });
+                                this.newTodoTitle = '';
+                                this.checkEmpty = false;
+                                this.delayTime = '0';
+
+                        }
+                    // this.newTodoTitle = this.newTodoTitle + '\n';
+                },
+                editDone: function (todo) {
+                    if (todo.title === '') {
+                        this.removeTodo(todo)
+                    }
+                    this.editedTodo = null;
+                },
+                cancelEdit: function (todo) {
+                    todo.title = this.editedTodo.title;
+                    this.editedTodo = null
+                },
+                clearCompleted: function () {
+                    confirm('确认清除全部已完成的代办事项?').then((confirmed) => {
+                        if (confirmed) {
+                            this.completedTodos.map(todo => todo.removed = true);
+                            this.recycleBin.unshift(...this.completedTodos);
+                            this.todos = this.leftTodos;
+                        }
+                    });
+                },
+                clearAll: function () {
+                    confirm('确认清除全部待办事项?').then((confirmed) => {
+                        if (confirmed) {
+                            this.todos.map(todo => todo.removed = true);
+                            this.recycleBin.unshift(...this.todos);
+                            this.todos = []
+                        }
+                    });
+                },
+                //拖拽 ------------------
+                dragstart: function (index) {
+                    this.dragIndex = index;
+                },
+                dragenter: function (e, index) {
+                    e.preventDefault();
+                    // 避免源对象触发自身的dragenter事件
+                    if (this.dragIndex !== index) {
+                        const source = this.filteredTodos[this.dragIndex];
+                        this.filteredTodos.splice(this.dragIndex, 1);
+                        this.filteredTodos.splice(index, 0, source);
+                        // 排序变化后目标对象的索引变成源对象的索引
+                        this.dragIndex = index;
+                    }
+                },
+                dragover: function (e, index) {
+                    e.preventDefault();
+                },
+                // JS钩子 加载动画
+                beforeEnter(dom) {
+                    dom.classList.add('drag-enter-active');
+                },
+                enter(dom, done) {
+                    let delay = dom.dataset.delay;
+                    setTimeout(() => {
+                        this.delayTime = '1';
+                        dom.classList.remove('drag-enter-active');
+                        dom.classList.add('drag-enter-to');
+                        let transitionend = window.ontransitionend ? "transitionend" :"webkitTransitionEnd";
+                        dom.addEventListener(transitionend, function onEnd() {
+                            dom.removeEventListener(transitionend, onEnd);
+                            done();
+                            //调用done() 告诉vue动画已完成，以触发 afterEnter 钩子
+                        })
+                    }, delay);
+                },
+                afterEnter(dom) {
+                    dom.classList.remove('drag-enter-to');
+                },
+                saveLanguage(lang) {
+                    localStorage.setItem('uiineed-todos-lang', lang);
+                }
+            },
+            mounted() {
+                this.show = true;
+                var that = this;
+                this.contorlScreen();
+                   // <!--把window.onresize事件挂在到mounted函数上-->
+                window.onresize = () => {
+                    return (() => {
+                    window.fullWidth = document.documentElement.clientWidth;
+                    that.windowWidth = window.fullWidth; // 宽
+                    })()
+                };
+            },
+            directives: {
+                focus: {
+                    inserted: function (el) {
+                        el.focus()
+                    }
+                }
+            },
+            computed: {
+                emptyChecked: function () {
+                    return this.newTodoTitle.length === 0 && this.checkEmpty
+                },
+                leftTodos: function () {
+                    return this.todos.filter(function (todo) {
+                        return !todo.completed
+                    })
+                },
+                leftTodosCount: function () {
+                    return this.leftTodos.length
+                },
+
+                hasRemovedTodo: function () {
+                    return !!this.removedTodo
+                },
+                completedTodos: function () {
+                    return this.todos.filter(function (todo) {
+                        return todo.completed
+                    })
+                },
+                completedTodosCount: function () {
+                    return this.completedTodos.length
+                },
+                filteredTodos: function () {
+                    if (this.intention === 'ongoing') {
+                        return this.leftTodos
+                    } else if (this.intention === 'completed') {
+                        return this.completedTodos
+                    } else if (this.intention === 'removed') {
+                        return this.recycleBin
+                    } else {
+                        return this.todos
+                    }
+                },
+                showEmptyTips() {
+                    return this.filteredTodos.length === 0 && this.intention !== 'removed';
+                },
+            },
+        })
+    </script>
+    <script>
+        // 调用 fetch 方法从 localStorage 获取数据
+        var fetchedTodos = todoStorage.fetch();
+        // 在控制台打印获取到的数据
+        // console.log("Stored Todos:", fetchedTodos);
+        const handleClickDownload = () => {
+            const todosText = JSON.stringify(todoStorage.fetch(), null, 2);
+            const date = new Date().toISOString().replace(/-|:|\.\d+/g, '');
+            const fileName = `todos-${date.slice(0, 8)}-${date.slice(9, 15)}.txt`;
+            
+            const element = document.createElement('a');
+            element.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(todosText);
+            element.download = fileName;
+            
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        };
+
+        // 导入文件
+        let tempFileInput = null; // 用于存储动态创建的文件输入元素
+        document.getElementById('import').addEventListener('click', function() {
+            if (!tempFileInput) {
+                // 如果不存在，则创建一个新的文件输入元素
+                tempFileInput = document.createElement('input');
+                tempFileInput.type = 'file';
+                tempFileInput.accept = '.txt,.json';
+                tempFileInput.style.display = 'none';
+                // 将新创建的文件输入元素添加到DOM中
+                // 这里选择添加到导入按钮的父元素内作为示例
+                this.parentNode.appendChild(tempFileInput);
+
+                // 为文件输入元素添加change事件监听器
+                tempFileInput.addEventListener('change', function(event) {
+                    var file = event.target.files[0];
+                    if (!file) return alert('没有选择文件！', '错误');
+                    var reader = new FileReader();
+                    reader.onload = function(e) {
+                        var content = e.target.result;
+                        try {
+                            var importedData;
+                            if (file.type === 'application/json') {
+                                // 如果是JSON文件，直接解析
+                                importedData = JSON.parse(content);
+
+                            } else if (file.type === 'text/plain') {
+                                // 如果是TXT文件，尝试将其解析为JSON（假设TXT文件内容格式正确）
+
+                                importedData = JSON.parse(content.trim());
+                            } else {
+                                throw new Error('不支持的文件类型');
+                            }
+                            // 从localStorage获取当前数据
+                            var currentTodos = todoStorage.fetch() || [];
+                            // 获取当前数据的数量，用于生成新的唯一id
+                            var nextIdIndex = currentTodos.length;
+                            // 遍历importedData，更新每一项的id
+                            importedData.forEach((item, index) => {
+                                item.id = nextIdIndex + index;
+                            });
+                            // 将新导入的数据追加到现有数据中
+                            var updatedTodos = currentTodos.concat(importedData);
+                            // 更新localStorage
+                            todoStorage.save(updatedTodos);
+                            // 更新页面内容
+                            updatePageContent(updatedTodos);
+                            alert('文件导入成功，数据已追加！');
+                        } catch (error) {
+                            alert('文件解析错误，请确保文件格式正确：' + error.message, '错误');
+                        }
+                    };
+                    reader.onerror = function(e) {
+                        alert('读取文件时发生错误：' + e.target.error.name, '错误');
+                    };
+                    reader.readAsText(file);
+                    this.parentNode.removeChild(tempFileInput);
+                     tempFileInput = null; // 重置变量以备后用
+                });
+            };
+            // 触发文件选择对话框
+            tempFileInput.click();
+        });
+        // 更新页面内容函数
+        function updatePageContent(data) {
+            // app.todos.push(data);
+            app.todos = data;
+            // function logAllIds(data) {
+            //     data.forEach(item => {
+            //         console.log("更新的数据ID:", item.id);
+            //     });
+            // }
+            // logAllIds(data);
+        }
+    </script>
+
+
+</body>
+</html>

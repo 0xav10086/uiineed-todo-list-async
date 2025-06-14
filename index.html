@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Todo List Online - Minimalist, No-Login Required Web Todo App</title>
+        <meta
+            name="keywords"
+            content="online todo list, minimalist todo app, no login todo, web todo list, todo manager, task scheduler, memo app, browser-based todo, instant access, secure storage, personal todo, professional todo, work and life assistant">
+        <meta
+            name="description"
+            content="uiineed's Todo List Online is a minimalist, no-login-required web app that helps you manage your tasks and schedules effortlessly. Store your todos securely in your browser's local cache, and enjoy a seamless experience without the hassle of sign-ups or logins. Perfect for both personal and professional use!">
+        <link type="favicon" rel="shortcut icon" href="public/img/favicon.png"/>
+        <link href="public/css/normalize.css" rel="stylesheet" media="screen">
+        <link href="public/css/style.min.css" rel="stylesheet" media="screen">
+        <script>
+            // Automatically detect and switch language
+            const browserLanguage = navigator.language || navigator.userLanguage;
+            const languageCode = browserLanguage.split('-')[0].toLowerCase();
+            if (!localStorage.getItem('uiineed-todos-lang')) localStorage.setItem('uiineed-todos-lang', languageCode);
+            const userLanguage = localStorage.getItem('uiineed-todos-lang');
+            if (userLanguage && userLanguage === "zh") window.location.href = (window.location.pathname === "/") ? 'index-zh.html' : window.location.href.replace('index.html', 'index-zh.html');
+        </script>
+        <script>
+            const nativeAlert = window.alert;
+            window.alert = function(message, title = 'Prompt') {
+                return new Promise((resolve) => {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'custom-alert-overlay';
+                    const alertBox = document.createElement('div');
+                    alertBox.className = 'custom-alert';
+                    alertBox.innerHTML = `
+<div class="custom-alert-title">${title}</div>
+<div class="custom-alert-content">${message}</div>
+<div class="custom-alert-buttons">
+    <button class="custom-alert-btn confirm">OK</button>
+</div>
+                    `;
+                    overlay.appendChild(alertBox);
+                    document.body.appendChild(overlay);
+                    const confirmBtn = alertBox.querySelector('.confirm');
+                    confirmBtn.addEventListener('click', () => {
+                        alertBox.style.animation = 'popOut 0.3s forwards';
+                        setTimeout(() => {
+                            document.body.removeChild(overlay);
+                            resolve(true);
+                        }, 300);
+                    });
+                    overlay.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape') confirmBtn.click();
+                    });
+                    confirmBtn.focus();
+                });
+            };
+            const nativeConfirm = window.alert;
+            window.confirm = function(message, title = 'Please Confirm') {
+                return new Promise((resolve) => {
+                    const overlay = document.createElement('div');
+                    overlay.className = 'custom-alert-overlay';
+                    const alertBox = document.createElement('div');
+                    alertBox.className = 'custom-alert';
+                    alertBox.innerHTML = `
+<div class="custom-alert-title">${title}</div>
+<div class="custom-alert-content">${message}</div>
+<div class="custom-alert-buttons">
+    <button class="custom-alert-btn cancel">Cancel</button>
+    <button class="custom-alert-btn confirm">OK</button>
+</div>
+                    `;
+                    overlay.appendChild(alertBox);
+                    document.body.appendChild(overlay);
+                    const confirmBtn = alertBox.querySelector('.confirm');
+                    const cancelBtn = alertBox.querySelector('.cancel');
+                    confirmBtn.addEventListener('click', () => {
+                        alertBox.style.animation = 'popOut 0.3s forwards';
+                        setTimeout(() => {
+                            document.body.removeChild(overlay);
+                            resolve(true);
+                        }, 300);
+                    });
+                    cancelBtn.addEventListener('click', () => {
+                        alertBox.style.animation = 'popOut 0.3s forwards';
+                        setTimeout(() => {
+                            document.body.removeChild(overlay);
+                            resolve(false);
+                        }, 300);
+                    });
+                    overlay.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape') cancelBtn.click();
+                    });
+                    cancelBtn.focus();
+                });
+            };
+        </script>
+        <!-- Vue 2.x Todo List -->
+        <!-- <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script> -->
+        <script src="public/js/vue.js"></script>
+    </head>
+
+    <body>
+        <div class="bg-pattern"></div>
+        <div class="todo-wrapper">
+            <div id="todo-app" class="todo-app">
+                <div class="container header ">
+                    <div class="todo-input">
+                        <h1 class="title">
+                            <img src="public/img/todo.svg" alt="" class="title-1" draggable="false">
+                            <div class="ani-vector">
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <div class="pendulums">
+                                <div class="pendulum">
+                                    <div class="bar"></div>
+                                    <div class="motion">
+                                        <div class="string"></div>
+                                        <div class="weight"></div>
+                                    </div>
+                                </div>
+                                <div class="pendulum shadow">
+                                    <div class="bar"></div>
+                                    <div class="motion">
+                                        <div class="string"></div>
+                                        <div class="weight"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </h1>
+                        <div class="add-content-wrapper">
+                            <input
+                                type="text"
+                                rows="3"
+                                class="add-content"
+                                placeholder="Add a to-do item..."
+                                v-model="newTodoTitle"
+                                @keyup.enter="addTodo"
+                                :class='{empty:emptyChecked}'/>
+                            <transition name="tips">
+                                <div class="tips" v-if='emptyChecked' style="color:red">💡Please enter content!</div>
+                            </transition>
+                            <button class="btn submit-btn" type="button" @click="addTodo">Add</button>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- todo list -->
+                <div class="container main">
+                    <div class="todo-list-box">
+                        <div class="bar-message">
+                            <input
+                                type="button"
+                                class="btn btn-label btn-allFinish"
+                                value="Mark All Done"
+                                @click="markAllAsCompleted"
+                                v-if="todos.length || recycleBin.length"/>
+                            <template>
+                                <div>
+                                    <div v-if="!isEditing" @dblclick="editText" class="bar-message-text">
+                                        {{ slogan }}
+                                    </div>
+                                    <div v-else="v-else">
+                                        <input
+                                            v-model="slogan"
+                                            ref="sloganInput"
+                                            class="slogan-input"
+                                            @keyup.enter="saveText"
+                                            @keyup.esc="cancelText"/>
+                                        <div class="todo-btn btn-edit-submit slogan-btn" @click="saveText"><img
+                                            src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAxOSAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE2LjUwODQgMTAuMzEwOUMxNy4yMzI0IDEwLjU4MjMgMTguMDM5NCAxMC4yMTU1IDE4LjMxMDkgOS40OTE1N0MxOC41ODIzIDguNzY3NiAxOC4yMTU1IDcuOTYwNjMgMTcuNDkxNiA3LjY4OTE0TDE2LjUwODQgMTAuMzEwOVpNOC45OTk5IDJMMTAuMTMyMSAxLjE3NjU1QzkuODU1OCAwLjc5NjYxOCA5LjQwNzM1IDAuNTgwNjA1IDguOTM4MDIgMC42MDEzNjhDOC40Njg3IDAuNjIyMTMgOC4wNDEwNyAwLjg3Njg5OSA3Ljc5OTM4IDEuMjc5NzRMOC45OTk5IDJaTTcuNjcxNzUgMTcuNTU3MkM3LjQyNzIyIDE4LjI5MDcgNy44MjM2MiAxOS4wODM2IDguNTU3MTMgMTkuMzI4MUM5LjI5MDY0IDE5LjU3MjcgMTAuMDgzNSAxOS4xNzYzIDEwLjMyOCAxOC40NDI4TDcuNjcxNzUgMTcuNTU3MlpNMS4wOTk2MyA3LjkyNzkzQzAuNTA3NTQxIDguNDI1MTkgMC40MzA2NjkgOS4zMDgyOCAwLjkyNzkzMSA5LjkwMDM3QzEuNDI1MTkgMTAuNDkyNSAyLjMwODI4IDEwLjU2OTMgMi45MDAzNyAxMC4wNzIxTDEuMDk5NjMgNy45Mjc5M1pNMTcuNDkxNiA3LjY4OTE0QzE1LjgwMjMgNy4wNTU2NSAxMy45ODQxIDUuNTAzNiAxMi41MDk5IDMuOTY3OTVDMTEuNzkzIDMuMjIxMjIgMTEuMTkzOSAyLjUxNzQgMTAuNzc0NCAyLjAwMDU2QzEwLjU2NTEgMS43NDI2OSAxMC40MDE3IDEuNTMyNzYgMTAuMjkxOSAxLjM4OTA4QzEwLjIzNyAxLjMxNzI3IDEwLjE5NTYgMS4yNjIxMSAxMC4xNjg2IDEuMjI1OUMxMC4xNTUxIDEuMjA3OCAxMC4xNDUzIDEuMTk0NDQgMTAuMTM5MSAxLjE4NjEyQzEwLjEzNjEgMS4xODE5NSAxMC4xMzQgMS4xNzkwNSAxMC4xMzI4IDEuMTc3NDRDMTAuMTMyMiAxLjE3NjY0IDEwLjEzMTggMS4xNzYxNiAxMC4xMzE3IDEuMTc2MDFDMTAuMTMxNyAxLjE3NTkzIDEwLjEzMTcgMS4xNzU5NCAxMC4xMzE3IDEuMTc2MDNDMTAuMTMxOCAxLjE3NjA3IDEwLjEzMTkgMS4xNzYyIDEwLjEzMTkgMS4xNzYyM0MxMC4xMzIgMS4xNzYzNyAxMC4xMzIxIDEuMTc2NTUgOC45OTk5IDJDNy44Njc2NyAyLjgyMzQ1IDcuODY3ODMgMi44MjM2NyA3Ljg2OCAyLjgyMzlDNy44NjgwOCAyLjgyNDAxIDcuODY4MjYgMi44MjQyNiA3Ljg2ODQyIDIuODI0NDdDNy44Njg3MiAyLjgyNDkgNy44NjkwOSAyLjgyNTQgNy44Njk1MyAyLjgyNTk5QzcuODcwMzkgMi44MjcxOCA3Ljg3MTUgMi44Mjg2OSA3Ljg3Mjg1IDIuODMwNTRDNy44NzU1NCAyLjgzNDIzIDcuODc5MjIgMi44MzkyNCA3Ljg4Mzg1IDIuODQ1NTNDNy44OTMxIDIuODU4MTEgNy45MDYxOSAyLjg3NTgyIDcuOTIyOTggMi44OTgzN0M3Ljk1NjU2IDIuOTQzNDUgOC4wMDQ5OSAzLjAwNzkyIDguMDY3MyAzLjA4OTQ0QzguMTkxODUgMy4yNTIzOSA4LjM3MjE3IDMuNDgzODcgOC42MDAzOCAzLjc2NTA2QzkuMDU1OTMgNC4zMjYzNSA5LjcwNjg1IDUuMDkxMjggMTAuNDkgNS45MDcwNUMxMi4wMTU4IDcuNDk2NCAxNC4xOTc3IDkuNDQ0MzUgMTYuNTA4NCAxMC4zMTA5TDE3LjQ5MTYgNy42ODkxNFpNNy42MTM5NyAyLjE5ODAxQzguMTA2NjkgNS42NDY2OSA4LjM0OTk3IDguODI5MjYgOC4zNDk5NyAxMS41QzguMzQ5OTcgMTQuMjAxNSA4LjEwMDE0IDE2LjI3MjIgNy42NzE3NSAxNy41NTcyTDEwLjMyOCAxOC40NDI4QzEwLjg5OTggMTYuNzI3OCAxMS4xNSAxNC4yOTg2IDExLjE1IDExLjVDMTEuMTUgOC42NzA3NiAxMC44OTMyIDUuMzUzMzEgMTAuMzg1OCAxLjgwMTk5TDcuNjEzOTcgMi4xOTgwMVpNMi45MDAzNyAxMC4wNzIxQzMuODgyMjggOS4yNDc0MiA1LjI5NjM2IDguMDkwMzMgNi42NDM3OSA2LjgzMDFDNy45NzY2NCA1LjU4MzUyIDkuMzQ1ODcgNC4xNDQ1OCAxMC4yMDA0IDIuNzIwMjZMNy43OTkzOCAxLjI3OTc0QzcuMTU0MDIgMi4zNTU0MiA2LjAyMzMxIDMuNTc2NjMgNC43MzExOCA0Ljc4NTEzQzMuNDUzNjQgNS45Nzk5OCAyLjExNzcyIDcuMDcyODkgMS4wOTk2MyA3LjkyNzkzTDIuOTAwMzcgMTAuMDcyMVoiIGZpbGw9IiMzMzMyMkUiLz4KPC9zdmc+Cg=="
+                                            alt="Finish"></div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <ul v-if="!todos.length && showEmptyTips" class="empty-tips">
+                            <li>Add Your First To-Do Item! 📝</li>
+                            <li>Usage Tips 💡:</li>
+                            <li>✔️ Press Enter to submit actions.</li>
+                            <li>✔️ Drag to reorder your to-dos (PC only)</li>
+                            <li>✔️ Double-click to edit slogan and tasks.</li>
+                            <li>✔️ Access quick actions in the right sidebar.</li>
+                            <li>🔒 Your data is stored locally in your browser.</li>
+                            <li>📝 Supports data download and import.
+                            </li>
+                        </ul>
+
+                        <transition-group
+                            name="drag"
+                            class="todo-list"
+                            tag="ul"
+                            mode="in-out"
+                            @before-enter="beforeEnter"
+                            @enter="enter"
+                            @after-enter="afterEnter"
+                            :css="false"
+                            appear="appear">
+
+                            <li
+                                v-for='(todo, index) in filteredTodos'
+                                :key='todo.id'
+                                class='todo-item'
+                                @dragenter="dragenter($event, index)"
+                                @dragover="dragover($event, index)"
+                                @dragstart="dragstart(index)"
+                                :data-delay="index * 150 * delayTime"
+                                v-show="show"
+                                :draggable="!(editedTodo !== null && editedTodo.id === todo.id)">
+                                <div
+                                    class="todo-content"
+                                    :class='{completed:todo.completed}'
+                                    @dblclick="editdTodo(todo)">
+                                    {{todo.title}}</div>
+                                <div
+                                    class="todo-btn btn-finish"
+                                    v-if="!todo.completed"
+                                    @click="markAsCompleted(todo)"></div>
+                                <div
+                                    class="todo-btn btn-unfinish"
+                                    v-if="todo.completed"
+                                    @click="markAsUncompleted(todo)">
+                                    <img
+                                        src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAyNCAxOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIuMzYzMTcgOS42NzUwNkMxLjU1OTM5IDkuNDc0NDkgMC43NDUyMDQgOS45NjM0OCAwLjU0NDYyOSAxMC43NjczQzAuMzQ0MDU0IDExLjU3MSAwLjgzMzA0NyAxMi4zODUyIDEuNjM2ODMgMTIuNTg1OEwyLjM2MzE3IDkuNjc1MDZaTTguMTU4NzMgMTZMNi43ODA0MSAxNi41OTE4QzcuMDMwOTggMTcuMTc1NCA3LjYyMTk1IDE3LjUzNzkgOC4yNTU3NSAxNy40OTY5QzguODg5NTQgMTcuNDU1OCA5LjQyODc3IDE3LjAyIDkuNjAxOTEgMTYuNDA4OUw4LjE1ODczIDE2Wk0yMi4zMjYxIDMuNDY0MTNDMjMuMTM0NyAzLjI4NDA2IDIzLjY0NDIgMi40ODI1NyAyMy40NjQxIDEuNjczOTVDMjMuMjg0MSAwLjg2NTMyOCAyMi40ODI2IDAuMzU1NzkxIDIxLjY3MzkgMC41MzU4NjZMMjIuMzI2MSAzLjQ2NDEzWk0xLjYzNjgzIDEyLjU4NThDMi4wMjc2NCAxMi42ODMzIDMuMTIyOTkgMTMuMTUxIDQuMjc3OCAxMy45NDI2QzUuNDM5ODggMTQuNzM5MyA2LjM4OTA2IDE1LjY4MDMgNi43ODA0MSAxNi41OTE4TDkuNTM3MDUgMTUuNDA4MkM4LjgxMDk0IDEzLjcxNzEgNy4zMDE1NyAxMi4zNzgzIDUuOTc0MDYgMTEuNDY4MkM0LjYzOTI3IDEwLjU1MzIgMy4yMTM5OSA5Ljg4NzM4IDIuMzYzMTcgOS42NzUwNkwxLjYzNjgzIDEyLjU4NThaTTkuNjAxOTEgMTYuNDA4OUMxMC4xMzU5IDE0LjUyNDQgMTEuNDk0OCAxMS42NTg1IDEzLjY3MjcgOS4wNjM5NUMxNS44NDQ1IDYuNDc2NzUgMTguNzQxNyA0LjI2MjM1IDIyLjMyNjEgMy40NjQxM0wyMS42NzM5IDAuNTM1ODY2QzE3LjI1ODMgMS41MTkyIDEzLjgyNzUgNC4yMTM0MiAxMS4zNzQ5IDcuMTM1MTRDOC45Mjg1MiAxMC4wNDk1IDcuMzY2NzQgMTMuMjkyOSA2LjcxNTU1IDE1LjU5MTFMOS42MDE5MSAxNi40MDg5WiIgZmlsbD0iIzMzMzIyRSIvPgo8L3N2Zz4K"
+                                        alt="Mark as Incomplete"
+                                        class="icon-finish" draggable="false">
+                                </div>
+                                <div
+                                    v-if="todo.removed"
+                                    class="todo-btn btn-restore"
+                                    @click="restoreTodo(todo)">
+                                    <img
+                                        src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkiIGhlaWdodD0iMTkiIHZpZXdCb3g9IjAgMCAxOSAxOSIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTcuMzQ3OTggMi42NTc5MkM3LjcxMTM0IDEuOTEzNDQgNy40MDIzOCAxLjAxNTM1IDYuNjU3OSAwLjY1MTk4OEM1LjkxMzQxIDAuMjg4NjI3IDUuMDE1MzIgMC41OTc1OSA0LjY1MTk2IDEuMzQyMDhMNy4zNDc5OCAyLjY1NzkyWk0xLjUyNiA5LjA4MzMzTDAuMzc1NTcxIDguMTIwNzhDMC4wNzc5NTE2IDguNDc2NDkgLTAuMDM4MzgyIDguOTQ5ODcgMC4wNjA0NjEyIDkuNDAzMDFDMC4xNTkzMDQgOS44NTYxNSAwLjQ2MjIwNiAxMC4yMzgxIDAuODgwOTI0IDEwLjQzNzVMMS41MjYgOS4wODMzM1pNMTQuNTcyNCAxNi41ODkzQzE0LjM0NTYgMTcuMzg2IDE0LjgwNzYgMTguMjE1OCAxNS42MDQ0IDE4LjQ0MjZDMTYuNDAxMiAxOC42Njk0IDE3LjIzMSAxOC4yMDczIDE3LjQ1NzggMTcuNDEwNkwxNC41NzI0IDE2LjU4OTNaTTYuMjUxOTIgMTQuMzMyMUM2LjcxMTQ1IDE1LjAyMTMgNy42NDI3NiAxNS4yMDc2IDguMzMyMDUgMTQuNzQ4MUM5LjAyMTM0IDE0LjI4ODUgOS4yMDc2IDEzLjM1NzIgOC43NDgwOCAxMi42Njc5TDYuMjUxOTIgMTQuMzMyMVpNNC42NTE5NiAxLjM0MjA4QzMuNjc2NiAzLjM0MDQ3IDIuNjAwMzMgNS4wNDUyNSAxLjc2NjU4IDYuMjUxMDhDMS4zNTA1OSA2Ljg1MjcyIDAuOTk3MjYzIDcuMzI2ODUgMC43NTAzODQgNy42NDc2MkMwLjYyNzAwNSA3LjgwNzkzIDAuNTMwMzkyIDcuOTI5NyAwLjQ2NjA0NyA4LjAwOTY5QzAuNDMzODggOC4wNDk2NyAwLjQwOTc5NiA4LjA3OTIgMC4zOTQ0ODIgOC4wOTc4NkMwLjM4NjgyNiA4LjEwNzE4IDAuMzgxMzY0IDguMTEzNzkgMC4zNzgxODMgOC4xMTc2M0MwLjM3NjU5MiA4LjExOTU1IDAuMzc1NTcyIDguMTIwNzcgMC4zNzUxMzMgOC4xMjEzQzAuMzc0OTE0IDguMTIxNTcgMC4zNzQ4NCA4LjEyMTY1IDAuMzc0OTEyIDguMTIxNTdDMC4zNzQ5NDggOC4xMjE1MiAwLjM3NTAyMSA4LjEyMTQ0IDAuMzc1MTMxIDguMTIxM0MwLjM3NTE4NiA4LjEyMTI0IDAuMzc1Mjk2IDguMTIxMTEgMC4zNzUzMjMgOC4xMjEwN0MwLjM3NTQ0MiA4LjEyMDkzIDAuMzc1NTcxIDguMTIwNzggMS41MjYgOS4wODMzM0MyLjY3NjQzIDEwLjA0NTkgMi42NzY1OCAxMC4wNDU3IDIuNjc2NzMgMTAuMDQ1NUMyLjY3NjggMTAuMDQ1NCAyLjY3Njk2IDEwLjA0NTIgMi42NzcwOSAxMC4wNDUxQzIuNjc3MzUgMTAuMDQ0OCAyLjY3NzY1IDEwLjA0NDQgMi42Nzc5OCAxMC4wNDRDMi42Nzg2NSAxMC4wNDMyIDIuNjc5NDYgMTAuMDQyMyAyLjY4MDQyIDEwLjA0MTFDMi42ODIzNCAxMC4wMzg4IDIuNjg0ODYgMTAuMDM1OCAyLjY4Nzk0IDEwLjAzMkMyLjY5NDEyIDEwLjAyNDYgMi43MDI2MSAxMC4wMTQzIDIuNzEzMzMgMTAuMDAxM0MyLjczNDc1IDkuOTc1MTYgMi43NjUwOCA5LjkzNzk1IDIuODAzNjIgOS44OTAwNUMyLjg4MDY3IDkuNzk0MjYgMi45OTA2IDkuNjU1NjEgMy4xMjc3OCA5LjQ3NzM4QzMuNDAyMDEgOS4xMjEwNiAzLjc4NTg3IDguNjA1NjIgNC4yMzQxNyA3Ljk1NzI1QzUuMTI5IDYuNjYzMDggNi4yODk3MiA0LjgyNjIgNy4zNDc5OCAyLjY1NzkyTDQuNjUxOTYgMS4zNDIwOFpNMi4wNDcwNCAxMC40ODk5QzMuNzc2MTcgOS44NDk0MiA1LjczMzE5IDkuMTcyMzEgNy42MzggOC43MjEzN0M5LjU3MDA4IDguMjYzOTkgMTEuMzAyNSA4LjA3NjMxIDEyLjYyODggOC4zMDE3QzEzLjg3NTIgOC41MTM1MiAxNC42Mjg0IDkuMDUwMDggMTUuMDE2MyAxMC4wNDA1QzE1LjQ2MjggMTEuMTgwNyAxNS41MzgzIDEzLjE5NTYgMTQuNTcyNCAxNi41ODkzTDE3LjQ1NzggMTcuNDEwNkMxOC40ODQzIDEzLjgwNDIgMTguNjE2NiAxMS4wMDY3IDE3LjgwOTcgOC45NDY0NkMxNi45NDQyIDYuNzM2MzQgMTUuMTMzNyA1LjY4NDM3IDEzLjEzMTQgNS4zNDQxMUMxMS4yMDkyIDUuMDE3NDMgOS4wMDc5OSA1LjMxNDEzIDYuOTQ2OSA1LjgwMjA2QzQuODU4NTYgNi4yOTY0NCAyLjc2MjgzIDcuMDI1NTggMS4wMDQ5NiA3LjY3NjczTDIuMDQ3MDQgMTAuNDg5OVpNOC43NDgwOCAxMi42Njc5QzcuNTIzMTIgMTAuODMwNSA1LjIyOTM0IDkuMTg1OTMgMi4xNzEwOCA3LjcyOTEzTDAuODgwOTI0IDEwLjQzNzVDMy43NzA2NiAxMS44MTQxIDUuNDc2ODggMTMuMTY5NSA2LjI1MTkyIDE0LjMzMjFMOC43NDgwOCAxMi42Njc5WiIgZmlsbD0iIzMzMzIyRSIvPgo8L3N2Zz4K"
+                                        alt="Restore" draggable="false">
+                                </div>
+                                <div
+                                    class="todo-btn btn-delete"
+                                    v-else="todo.removed"
+                                    @click="removeTodo(todo)">
+                                    <img
+                                        src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTgiIGhlaWdodD0iMTgiIHZpZXdCb3g9IjAgMCAxOCAxOCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZmlsbC1ydWxlPSJldmVub2RkIiBjbGlwLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xNS4wOTkzIDE3Ljc1OTdDMTUuNzk0OSAxOC4yMDk4IDE2LjcyMzUgMTguMDEwOCAxNy4xNzM2IDE3LjMxNTJDMTcuNjIzNiAxNi42MTk3IDE3LjQyNDYgMTUuNjkxMSAxNi43MjkxIDE1LjI0MUMxMy4zMDc5IDEzLjAyNzMgMTAuODIwOSAxMC45OTU5IDguOTIyNTEgOS4wMzczOUM5LjA5NzQyIDguODQ5ODIgOS4yNzI5MSA4LjY2NTcxIDkuNDQ4ODggOC40ODUzNEMxMS44ODY0IDUuOTg2OTIgMTQuMjQ3MiA0LjM4MDY2IDE2LjI5NDQgMy45NzEyMkMxNy4xMDY3IDMuODA4NzUgMTcuNjMzNSAzLjAxODUyIDE3LjQ3MTEgMi4yMDYxOEMxNy4zMDg2IDEuMzkzODQgMTYuNTE4NCAwLjg2NzAxMyAxNS43MDYgMS4wMjk0OEMxMi43NTMyIDEuNjIwMDUgOS44NjQwNiAzLjc2Mzc5IDcuMzAxNTQgNi4zOTAzN0M3LjE4MTUxIDYuNTEzNCA3LjA2MTgxIDYuNjM3ODkgNi45NDI0OSA2Ljc2Mzc1QzUuNDIwMDEgNC44MDQzMyA0LjM3MDU4IDIuODc2MzIgMy40MjU5MSAwLjg2MzE2NEMzLjA3Mzk5IDAuMTEzMjAyIDIuMTgwNzMgLTAuMjA5NDc1IDEuNDMwNzcgMC4xNDI0NDVDMC42ODA4MDkgMC40OTQzNjUgMC4zNTgxMzIgMS4zODc2MiAwLjcxMDA1MSAyLjEzNzU4QzEuODIwODggNC41MDQ4MSAzLjA3ODk5IDYuNzY1MTEgNC45MjkzMiA5LjA1MzA2QzMuMjIyMDYgMTEuMTM0MSAxLjYyNjY5IDEzLjQzMjggMC4yMjI3MjMgMTUuNzE0MkMtMC4yMTE0NTMgMTYuNDE5NyAwLjAwODUyNzUyIDE3LjM0MzcgMC43MTQwNjQgMTcuNzc3OEMxLjQxOTYgMTguMjEyIDIuMzQzNTIgMTcuOTkyIDIuNzc3NyAxNy4yODY1QzQuMDQ4MTkgMTUuMjIyIDUuNDY0MDUgMTMuMTcyNiA2Ljk1NTU5IDExLjMxNjhDOC45ODUgMTMuMzc2NSAxMS41OTU5IDE1LjQ5MjggMTUuMDk5MyAxNy43NTk3WiIgZmlsbD0iIzMzMzIyRSIvPgo8L3N2Zz4K"
+                                        alt="Delete" draggable="false">
+                                </div>
+
+                                <div
+                                    class="edit-todo-wrapper"
+                                    v-if="editedTodo !== null && editedTodo.id === todo.id">
+                                    <input
+                                        type="text"
+                                        class="edit-todo"
+                                        value="Edit Todo..."
+                                        v-if="editedTodo !== null && editedTodo.id === todo.id"
+                                        v-model="todo.title"
+                                        v-focus="true"
+                                        @keyup.enter="editDone(todo)"
+                                        @keyup.esc="cancelEdit(todo)"
+                                        @dragstart.stop.prevent
+                                        @mousedown.stop />
+                                    <div class="todo-btn btn-edit-submit" @click="editDone(todo)">
+                                        <img
+                                            src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTkiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAxOSAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTE2LjUwODQgMTAuMzEwOUMxNy4yMzI0IDEwLjU4MjMgMTguMDM5NCAxMC4yMTU1IDE4LjMxMDkgOS40OTE1N0MxOC41ODIzIDguNzY3NiAxOC4yMTU1IDcuOTYwNjMgMTcuNDkxNiA3LjY4OTE0TDE2LjUwODQgMTAuMzEwOVpNOC45OTk5IDJMMTAuMTMyMSAxLjE3NjU1QzkuODU1OCAwLjc5NjYxOCA5LjQwNzM1IDAuNTgwNjA1IDguOTM4MDIgMC42MDEzNjhDOC40Njg3IDAuNjIyMTMgOC4wNDEwNyAwLjg3Njg5OSA3Ljc5OTM4IDEuMjc5NzRMOC45OTk5IDJaTTcuNjcxNzUgMTcuNTU3MkM3LjQyNzIyIDE4LjI5MDcgNy44MjM2MiAxOS4wODM2IDguNTU3MTMgMTkuMzI4MUM5LjI5MDY0IDE5LjU3MjcgMTAuMDgzNSAxOS4xNzYzIDEwLjMyOCAxOC40NDI4TDcuNjcxNzUgMTcuNTU3MlpNMS4wOTk2MyA3LjkyNzkzQzAuNTA3NTQxIDguNDI1MTkgMC40MzA2NjkgOS4zMDgyOCAwLjkyNzkzMSA5LjkwMDM3QzEuNDI1MTkgMTAuNDkyNSAyLjMwODI4IDEwLjU2OTMgMi45MDAzNyAxMC4wNzIxTDEuMDk5NjMgNy45Mjc5M1pNMTcuNDkxNiA3LjY4OTE0QzE1LjgwMjMgNy4wNTU2NSAxMy45ODQxIDUuNTAzNiAxMi41MDk5IDMuOTY3OTVDMTEuNzkzIDMuMjIxMjIgMTEuMTkzOSAyLjUxNzQgMTAuNzc0NCAyLjAwMDU2QzEwLjU2NTEgMS43NDI2OSAxMC40MDE3IDEuNTMyNzYgMTAuMjkxOSAxLjM4OTA4QzEwLjIzNyAxLjMxNzI3IDEwLjE5NTYgMS4yNjIxMSAxMC4xNjg2IDEuMjI1OUMxMC4xNTUxIDEuMjA3OCAxMC4xNDUzIDEuMTk0NDQgMTAuMTM5MSAxLjE4NjEyQzEwLjEzNjEgMS4xODE5NSAxMC4xMzQgMS4xNzkwNSAxMC4xMzI4IDEuMTc3NDRDMTAuMTMyMiAxLjE3NjY0IDEwLjEzMTggMS4xNzYxNiAxMC4xMzE3IDEuMTc2MDFDMTAuMTMxNyAxLjE3NTkzIDEwLjEzMTcgMS4xNzU5NCAxMC4xMzE3IDEuMTc2MDNDMTAuMTMxOCAxLjE3NjA3IDEwLjEzMTkgMS4xNzYyIDEwLjEzMTkgMS4xNzYyM0MxMC4xMzIgMS4xNzYzNyAxMC4xMzIxIDEuMTc2NTUgOC45OTk5IDJDNy44Njc2NyAyLjgyMzQ1IDcuODY3ODMgMi44MjM2NyA3Ljg2OCAyLjgyMzlDNy44NjgwOCAyLjgyNDAxIDcuODY4MjYgMi44MjQyNiA3Ljg2ODQyIDIuODI0NDdDNy44Njg3MiAyLjgyNDkgNy44NjkwOSAyLjgyNTQgNy44Njk1MyAyLjgyNTk5QzcuODcwMzkgMi44MjcxOCA3Ljg3MTUgMi44Mjg2OSA3Ljg3Mjg1IDIuODMwNTRDNy44NzU1NCAyLjgzNDIzIDcuODc5MjIgMi44MzkyNCA3Ljg4Mzg1IDIuODQ1NTNDNy44OTMxIDIuODU4MTEgNy45MDYxOSAyLjg3NTgyIDcuOTIyOTggMi44OTgzN0M3Ljk1NjU2IDIuOTQzNDUgOC4wMDQ5OSAzLjAwNzkyIDguMDY3MyAzLjA4OTQ0QzguMTkxODUgMy4yNTIzOSA4LjM3MjE3IDMuNDgzODcgOC42MDAzOCAzLjc2NTA2QzkuMDU1OTMgNC4zMjYzNSA5LjcwNjg1IDUuMDkxMjggMTAuNDkgNS45MDcwNUMxMi4wMTU4IDcuNDk2NCAxNC4xOTc3IDkuNDQ0MzUgMTYuNTA4NCAxMC4zMTA5TDE3LjQ5MTYgNy42ODkxNFpNNy42MTM5NyAyLjE5ODAxQzguMTA2NjkgNS42NDY2OSA4LjM0OTk3IDguODI5MjYgOC4zNDk5NyAxMS41QzguMzQ5OTcgMTQuMjAxNSA4LjEwMDE0IDE2LjI3MjIgNy42NzE3NSAxNy41NTcyTDEwLjMyOCAxOC40NDI4QzEwLjg5OTggMTYuNzI3OCAxMS4xNSAxNC4yOTg2IDExLjE1IDExLjVDMTEuMTUgOC42NzA3NiAxMC44OTMyIDUuMzUzMzEgMTAuMzg1OCAxLjgwMTk5TDcuNjEzOTcgMi4xOTgwMVpNMi45MDAzNyAxMC4wNzIxQzMuODgyMjggOS4yNDc0MiA1LjI5NjM2IDguMDkwMzMgNi42NDM3OSA2LjgzMDFDNy45NzY2NCA1LjU4MzUyIDkuMzQ1ODcgNC4xNDQ1OCAxMC4yMDA0IDIuNzIwMjZMNy43OTkzOCAxLjI3OTc0QzcuMTU0MDIgMi4zNTU0MiA2LjAyMzMxIDMuNTc2NjMgNC43MzExOCA0Ljc4NTEzQzMuNDUzNjQgNS45Nzk5OCAyLjExNzcyIDcuMDcyODkgMS4wOTk2MyA3LjkyNzkzTDIuOTAwMzcgMTAuMDcyMVoiIGZpbGw9IiMzMzMyMkUiLz4KPC9zdmc+Cg=="
+                                            alt="提交" draggable="false">
+                                    </div>
+                                </div>
+                            </li>
+                        </transition-group>
+                        <div class="bar-message bar-bottom">
+                            <div class="bar-message-text">
+                                <span v-if="leftTodosCount">{{leftTodosCount}} items remaining</span>
+                                <span v-else-if="completedTodosCount">All completed, good job!</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="footer side-bar">
+                        <div class="side-shortcut" @click="shortCutAction()" :class="{fold: isShow}">
+                            <div class="shortcut-switch">
+                                <span class="shortcut-title">{{shortCut}}</span>
+                                <span class="shortcut-name">Quicks
+                                </span>
+                            </div>
+
+                        </div>
+                        <div class="todo-footer-box">
+                            <ul class="todo-func-list filter">
+                                <!-- <li v-if="todos.length || recycleBin.length">Filter：</li> -->
+                                <!-- <li v-if="hasRemovedTodo" ><input type="button" value="Back"
+                                v-if="hasRemovedTodo" @click="restoreTodo()"></li> -->
+                                <li >
+                                    <input
+                                        class="btn-small action-showAll"
+                                        type="button"
+                                        value="All"
+                                        :class="{selected: intention === 'all'}"
+                                        @click="intention ='all'"></li>
+                                <li v-if="completedTodosCount"><input
+                                    class="btn-small action-progress"
+                                    type="button"
+                                    value="In Progress"
+                                    v-if="leftTodosCount"
+                                    :class="{selected: intention === 'ongoing'}"
+                                    @click="intention ='ongoing'"></li>
+                                <li v-if="completedTodosCount">
+                                    <input
+                                        class="btn-small action-completed"
+                                        type="button"
+                                        value="Completed"
+                                        v-if="completedTodosCount"
+                                        :class="{selected: intention === 'completed'}"
+                                        @click="intention='completed'">
+                                </li>
+                                <li v-if="recycleBin.length">
+                                    <input
+                                        class="btn-small action-deleted"
+                                        type="button"
+                                        v-if="recycleBin.length"
+                                        :class="{selected: intention === 'removed'}"
+                                        value="Trash"
+                                        @click="intention='removed'"/>
+                                </li>
+                            </ul>
+                            <ul class="todo-func-list batch">
+                                <!-- <li v-if="todos.length"></li> -->
+                                <li v-if="leftTodosCount">
+                                    <input
+                                        type="button"
+                                        class="btn-small completed-all"
+                                        v-if="leftTodosCount"
+                                        value="Finish all"
+                                        @click="markAllAsCompleted">
+                                </li>
+                                <li v-if="completedTodosCount">
+                                    <input
+                                        type="button"
+                                        value="Clear Completed"
+                                        class="btn-small completed-clear"
+                                        v-if="completedTodosCount"
+                                        @click="clearCompleted">
+                                </li>
+                                <li v-if="todos.length"><input
+                                    type="button"
+                                    class="btn-small clear-all"
+                                    value="Clear All"
+                                    @click="clearAll">
+                                </li>
+                            </ul>
+                            <ul class="todo-func-list datasave">
+                                <li v-if="leftTodosCount">
+                                    <input
+                                        type="button"
+                                        value="Export data"
+                                        class="btn-small  action-download"
+                                        id="download"
+                                        onclick="handleClickDownload()"></input>
+                                </li>
+                                <li>
+                                    <input
+                                        value="Import(txt/json)"
+                                        type="button"
+                                        class="btn-small action-import"
+                                        id="import"/>
+                                    <!-- <input type="file" id="import-file" accept=".txt,.json"
+                                    style="display:none"> -->
+                                </li>
+                            </ul>
+
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Custom Info -->
+                <div class="nav">
+                    <div class="github">
+                        <a href="https://github.com/ricocc/uiineed-todo-list?ref=opensource-todo" target="_blank" class="social-link" draggable="false">
+                            <img src="public/img/social/github.svg" class="ic-social" alt="" draggable="false">
+                        </a>
+                    </div>
+                    <!-- <div class="about">
+                        <div class="info">
+                            <div
+                                class="info-ico"
+                                @click="togglePop"
+                                :style="{ fontWeight: popShow ? 'normal' : 'bold' }">
+                                About
+                            </div>
+                            <div class="popup animated popIn" v-if="!popShow">
+                                <div class="author">
+                                    <img src="public/img/author.jpg" alt="">
+                                    RicoCC
+                                </div>
+                                <div class="author-info">
+                                    <div class="author-desc">
+                                        A simple one who loves design and code.
+                                    </div>
+                                </div>
+                                <div class="social">
+                                    <a href="mailto:ricocc@qq.com" class="social-link">
+                                        <img src="public/img/social/mail.svg" class="ic-social" alt="">
+                                    </a>
+                                    <a
+                                        href="https://www.xiaohongshu.com/user/profile/5f2b6903000000000101f51f?ref=uiineed-todo"
+                                        target="_blank"
+                                        class="social-link">
+                                        <img src="public/img/social/xiaohongshu.svg" class="ic-social" alt="">
+                                    </a>
+
+                                    <a
+                                        href="https://dribbble.com/rrrricocc?=todo-en"
+                                        target="_blank"
+                                        class="social-link">
+                                        <img src="public/img/social/dribbble.svg" class="ic-social" alt="">
+                                    </a>
+                                    <a
+                                        href="https://bsky.app/profile/ricocc.bsky.social"
+                                        target="_blank"
+                                        class="social-link">
+                                        <img src="public/img/social/bluesky.svg" class="ic-social" alt="">
+                                    </a>
+                                    <a href="https://x.com/ricouii" target="_blank" class="social-link">
+                                        <img src="public/img/social/x.svg" class="ic-social" alt="">
+                                    </a>
+                                </div>
+
+                                <a href="https://blog.ricocc.com/?ref=todo" target="_blank" class="inspiration">🔖Rico's Blog↗
+                                </a>
+                            </div>
+                        </div>
+                    </div> -->
+
+                <!-- witch Chinese Or English as homepage as required -->
+                    <div class="language switch-language">
+                        <a href="javascript:void(0)" class="en active" draggable="false">En</a>
+                        <span>/</span>
+                        <a href="index-zh.html" target="_self" class="zh" draggable="false" @click="saveLanguage('zh')">中</a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        <script>
+            // localStorage operations
+            var STORAGE_KEY = 'uiineed-todos';
+            var todoStorage = {
+                fetch: function() {
+                    var todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                    todos.forEach(function(todo, index) {
+                        todo.id = index;
+                    });
+                    todoStorage.uid = todos.length;
+                    return todos;
+                },
+                save: function(todos) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+                }
+            }
+        </script>
+        <script>
+            // Vue instance initialization
+            var app = new Vue({
+                el: '#todo-app',
+                data: function() {
+                    return {
+                        todos: todoStorage.fetch(),
+                        newTodoTitle: '',
+                        editedTodo: null,
+                        intention: 'all', // Default: all
+                        checkEmpty: false,
+                        recycleBin: [],
+                        dragIndex: '',
+                        enterIndex: '',
+                        show: true,
+                        delayTime: '1',
+                        isShow: false,
+                        shortCut: 'OPEN✨',
+                        popShow: true,
+                        windowWidth: document.documentElement.clientWidth,
+                        slogan: this.getSlogan(),
+                        isEditing: false,
+                        originalSlogan: ""
+                    };
+                },
+                watch: {
+                    windowWidth(val) {
+                        let that = this;
+                    },
+                    todos: {
+                        handler: function(todos) {
+                            todoStorage.save(todos);
+                        },
+                        deep: true
+                    }
+                },
+                methods: {
+                    editText() {
+                        this.originalSlogan = this.slogan;
+                        this.isEditing = true;
+                        this.$nextTick(() => {
+                            this.$refs.sloganInput.focus();
+                        });
+                    },
+                    saveText() {
+                        this.isEditing = false;
+                        localStorage.setItem('uiineed-slogan', this.slogan);
+                    },
+                    cancelText() {
+                        this.slogan = this.originalSlogan;
+                        this.isEditing = false;
+                    },
+                    getSlogan() {
+                        return localStorage.getItem('uiineed-slogan') || "Act Now, Simplify Life.☕";
+                    },
+                    contorlScreen: function() {
+                        if (this.windowWidth < 768) {
+                            this.isShow = !this.isShow;
+                            return this.shortCut = 'Filter';
+                        }
+                    },
+                    togglePop: function() {
+                        this.popShow = !this.popShow;
+                    },
+                    shortCutAction: function() {
+                        this.isShow = !this.isShow;
+                        if (this.isShow) {
+                            return this.shortCut = '＝';
+                        } else {
+                            return this.shortCut = 'OPEN✨';
+                        }
+                    },
+                    shuffle: function() {
+                        this.filteredTodos = _.shuffle(this.filteredTodos);
+                    },
+                    addTodo: function(e) {
+                        if (this.newTodoTitle === '') {
+                            this.checkEmpty = true;
+                            return;
+                        }
+                        this.todos.unshift({
+                            id: todoStorage.uid++,
+                            title: this.newTodoTitle,
+                            completed: false,
+                            removed: false
+                        });
+                        this.newTodoTitle = '';
+                        this.checkEmpty = false;
+                        this.delayTime = '0';
+                    },
+                    markAsCompleted: function(todo) {
+                        todo.completed = true;
+                    },
+                    markAsUncompleted: function(todo) {
+                        todo.completed = false;
+                    },
+                    markAllAsCompleted: function() {
+                        confirm('Confirm to mark all as completed?').then((confirmed) => {
+                            if (confirmed) {
+                                this.todos.map(function(todo) {
+                                    if (!todo.completed) todo.completed = true;
+                                });
+                            }
+                        }); 
+                    },
+
+                    removeTodo: function(todo) {
+                        let removedTodo = this.todos.splice(this.todos.indexOf(todo), 1)[0];
+                        removedTodo.removed = true;
+                        this.recycleBin.unshift(removedTodo);
+                    },
+                    restoreTodo: function(todo) {
+                        todo.removed = false;
+                        this.todos.unshift(todo);
+                        let pos = this.recycleBin.indexOf(todo);
+                        this.recycleBin.splice(pos, 1);
+                    },
+                    editdTodo: function(todo) {
+                        this.editedTodo = {
+                            id: todo.id,
+                            title: todo.title
+                        }
+                    },
+                    lineFeed: function(event) {
+                        if (event.keyCode == 13 && event.ctrlKey) {
+                            this.newTodoTitle = this.newTodoTitle + '\n';
+                        } else {
+                            if (this.newTodoTitle === '') {
+                                this.checkEmpty = true;
+                                return;
+                            }
+                            this.todos.unshift({
+                                id: todoStorage.uid++,
+                                title: this.newTodoTitle,
+                                completed: false,
+                                removed: false
+                            });
+                            this.newTodoTitle = '';
+                            this.checkEmpty = false;
+                            this.delayTime = '0';
+                        }
+                    },
+                    editDone: function(todo) {
+                        if (todo.title === '') {
+                            this.removeTodo(todo);
+                        }
+                        this.editedTodo = null;
+                    },
+                    cancelEdit: function(todo) {
+                        todo.title = this.editedTodo.title;
+                        this.editedTodo = null;
+                    },
+                    clearCompleted: function() {
+                        confirm('Confirm to clear all completed items?').then((confirmed) => {
+                            if (confirmed) {
+                                this.completedTodos.map(todo => todo.removed = true);
+                                this.recycleBin.unshift(...this.completedTodos);
+                                this.todos = this.leftTodos;
+                            }
+                        });
+                    },
+                    clearAll: function() {
+                        confirm('Confirm to clear all todo items?').then((confirmed) => {
+                            if (confirmed) {
+                                this.todos.map(todo => todo.removed = true);
+                                this.recycleBin.unshift(...this.todos);
+                                this.todos = [];
+                            }
+                        });
+                    },
+
+                    // Drag Operations
+                    dragstart: function(index) {
+                        this.dragIndex = index;
+                    },
+                    dragenter: function(e, index) {
+                        e.preventDefault();
+                        // Avoid source object triggering its own dragenter event
+                        if (this.dragIndex !== index) {
+                            const source = this.filteredTodos[this.dragIndex];
+                            this.filteredTodos.splice(this.dragIndex, 1);
+                            this.filteredTodos.splice(index, 0, source);
+                            // After reordering, target index becomes source index
+                            this.dragIndex = index;
+                        }
+                    },
+                    dragover: function(e, index) {
+                        e.preventDefault();
+                    },
+                    // JS hooks for animation
+                    beforeEnter(dom) {
+                        dom.classList.add('drag-enter-active');
+                    },
+                    enter(dom, done) {
+                        let delay = dom.dataset.delay;
+                        setTimeout(() => {
+                            this.delayTime = '1';
+                            dom.classList.remove('drag-enter-active');
+                            dom.classList.add('drag-enter-to');
+                            let transitionend = window.ontransitionend
+                                ? "transitionend"
+                                : "webkitTransitionEnd";
+                            dom.addEventListener(transitionend, function onEnd() {
+                                dom.removeEventListener(transitionend, onEnd);
+                                done();
+                                // Call done() to tell Vue animation is complete, triggering afterEnter hook
+                            })
+                        }, delay);
+                    },
+                    afterEnter(dom) {
+                        dom.classList.remove('drag-enter-to');
+                    },
+                    saveLanguage(lang) {
+                        localStorage.setItem('uiineed-todos-lang', lang);
+                    }
+                },
+
+                mounted() {
+                    this.show = true;
+                    var that = this;
+                    this.contorlScreen();
+                    // Attach window.onresize event to mounted function
+                    window.onresize = () => {
+                        return (() => {
+                            window.fullWidth = document.documentElement.clientWidth;
+                            that.windowWidth = window.fullWidth; // width
+                        })()
+                    };
+                },
+
+                directives: {
+                    focus: {
+                        inserted: function(el) {
+                            el.focus()
+                        }
+                    }
+                },
+
+                computed: {
+                    emptyChecked: function() {
+                        return this.newTodoTitle.length === 0 && this.checkEmpty
+                    },
+                    leftTodos: function() {
+                        return this.todos.filter(function(todo) {
+                            return !todo.completed
+                        })
+                    },
+                    leftTodosCount: function() {
+                        return this.leftTodos.length
+                    },
+                    hasRemovedTodo: function() {
+                        return !!this.removedTodo
+                    },
+                    completedTodos: function() {
+                        return this.todos.filter(function(todo) {
+                            return todo.completed
+                        })
+                    },
+                    completedTodosCount: function() {
+                        return this.completedTodos.length
+                    },
+                    filteredTodos: function() {
+                        if (this.intention === 'ongoing') {
+                            return this.leftTodos
+                        } else if (this.intention === 'completed') {
+                            return this.completedTodos
+                        } else if (this.intention === 'removed') {
+                            return this.recycleBin
+                        } else {
+                            return this.todos
+                        }
+                    },
+                    showEmptyTips() {
+                        return this.filteredTodos.length === 0 && this.intention !== 'removed';
+                    }
+                }
+                })
+        </script>
+        <script>
+            // Fetch data from localStorage
+            var fetchedTodos = todoStorage.fetch();
+
+            const handleClickDownload = () => {
+                const todosText = JSON.stringify(todoStorage.fetch(), null, 2);
+                const date = new Date().toISOString().replace(/-|:|\.\d+/g, '');
+                const fileName = `todos-${date.slice(0, 8)}-${date.slice(9, 15)}.txt`;
+                
+                const element = document.createElement('a');
+                element.href = 'data:text/plain;charset=utf-8,' + encodeURIComponent(todosText);
+                element.download = fileName;
+                
+                document.body.appendChild(element);
+                element.click();
+                document.body.removeChild(element);
+            };
+
+            // Import file
+            let tempFileInput = null; // Store dynamically created file input element
+            document.getElementById('import').addEventListener('click', function() {
+                if (!tempFileInput) {
+                    tempFileInput = document.createElement('input');
+                    tempFileInput.type = 'file';
+                    tempFileInput.accept = '.txt,.json';
+                    tempFileInput.style.display = 'none';
+                    this.parentNode.appendChild(tempFileInput);
+
+                    tempFileInput.addEventListener('change', function(event) {
+                        var file = event.target.files[0];
+                        if (!file) return alert('No file selected!', 'Error');
+                        var reader = new FileReader();
+                        reader.onload = function(e) {
+                            var content = e.target.result;
+                            try {
+                                var importedData;
+                                if (file.type === 'application/json') {
+                                    // If JSON file, parse directly
+                                    importedData = JSON.parse(content);
+                                } else if (file.type === 'text/plain') {
+                                    // If TXT file, try to parse as JSON
+                                    importedData = JSON.parse(content.trim());
+                                } else {
+                                    throw new Error('Unsupported file type');
+                                }
+                                // Get current data from localStorage
+                                var currentTodos = todoStorage.fetch() || [];
+                                // Get current data count for new unique ids
+                                var nextIdIndex = currentTodos.length;
+                                // Update ids for imported data
+                                importedData.forEach((item, index) => {
+                                    item.id = nextIdIndex + index;
+                                });
+                                // Append imported data to existing data
+                                var updatedTodos = currentTodos.concat(importedData);
+                                // Update localStorage
+                                todoStorage.save(updatedTodos);
+                                // Update page content
+                                updatePageContent(updatedTodos);
+                                alert('File imported successfully, data has been appended!');
+                            } catch (error) {
+                                alert('File parsing error, please ensure correct format: ' + error.message, 'Error');
+                            }
+                        };
+                        reader.onerror = function(e) {
+                            alert('Error reading file: ' + e.target.error.name, 'Error');
+                        };
+                        reader.readAsText(file);
+                        this.parentNode.removeChild(tempFileInput);
+                        tempFileInput = null;
+                    });
+                }
+                tempFileInput.click();
+            });
+
+            function updatePageContent(data) {
+                app.todos = data;
+            }
+
+        </script>
+    </body>
+
+</html>
